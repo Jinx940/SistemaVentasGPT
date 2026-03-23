@@ -322,39 +322,18 @@ async function setConfigValue(clave, valor) {
 async function getWhatsAppSettings() {
   const cfg = await getConfigMap();
 
-  function readSetting(dbValue, envValue = '') {
-    const dbText = cleanText(dbValue);
-    if (dbText) return dbText;
-    return cleanText(envValue);
-  }
+  const getValue = (key, fallback = '') =>
+    cleanText(cfg[key] || process.env[key] || fallback);
 
-  const enabledRaw = readSetting(
-    cfg.WA_ENABLED,
-    process.env.WA_ENABLED || 'false'
-  );
+  const enabledRaw = getValue('WA_ENABLED', 'false').toLowerCase();
 
   return {
-    enabled: enabledRaw.toLowerCase() === 'true',
-    graphVersion: readSetting(
-      cfg.WA_GRAPH_VERSION,
-      process.env.WA_GRAPH_VERSION || 'v23.0'
-    ),
-    phoneNumberId: readSetting(
-      cfg.WA_PHONE_NUMBER_ID,
-      process.env.WA_PHONE_NUMBER_ID || ''
-    ),
-    accessToken: readSetting(
-      cfg.WA_ACCESS_TOKEN,
-      process.env.WA_ACCESS_TOKEN || ''
-    ),
-    templateName: readSetting(
-      cfg.WA_TEMPLATE_NAME,
-      process.env.WA_TEMPLATE_NAME || 'gpt_plus_vence_hoy'
-    ),
-    langCode: readSetting(
-      cfg.WA_LANG_CODE,
-      process.env.WA_LANG_CODE || 'es_PE'
-    ),
+    enabled: enabledRaw === 'true',
+    graphVersion: getValue('WA_GRAPH_VERSION', 'v23.0'),
+    phoneNumberId: getValue('WA_PHONE_NUMBER_ID', ''),
+    accessToken: getValue('WA_ACCESS_TOKEN', ''),
+    templateName: getValue('WA_TEMPLATE_NAME', 'gpt_plus_vence_hoy'),
+    langCode: getValue('WA_LANG_CODE', 'es_PE'),
   };
 }
 
