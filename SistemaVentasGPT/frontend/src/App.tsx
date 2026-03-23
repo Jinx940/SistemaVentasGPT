@@ -375,6 +375,9 @@ function buildDashboardParams(dateFrom: string, dateTo: string): DashboardResume
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window === 'undefined' ? 1280 : window.innerWidth,
+  )
   const [authReady, setAuthReady] = useState(false)
   const [setupRequired, setSetupRequired] = useState(false)
   const [authCheckNonce, setAuthCheckNonce] = useState(0)
@@ -462,6 +465,15 @@ function App() {
   const [paymentMonto, setPaymentMonto] = useState('')
   const [paymentMeses, setPaymentMeses] = useState<'1' | '2'>('1')
   const [paymentFecha, setPaymentFecha] = useState(getTodayIso())
+  const isMobile = viewportWidth < 960
+  const isPhone = viewportWidth < 640
+
+  useEffect(() => {
+    const handleResize = () => setViewportWidth(window.innerWidth)
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     dashboardRangeRef.current = buildDashboardParams(dashboardDateFrom, dashboardDateTo)
@@ -2168,7 +2180,7 @@ function App() {
         width: '100%',
         overflowX: 'hidden',
         background: 'linear-gradient(135deg, #020617 0%, #0f172a 45%, #111827 100%)',
-        padding: '16px 20px 16px 0',
+        padding: isMobile ? '12px' : '16px 20px 16px 0',
         fontFamily: 'Arial, sans-serif',
         color: '#e5e7eb',
       }}
@@ -2177,8 +2189,8 @@ function App() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '260px minmax(0, 1fr)',
-            gap: '20px',
+            gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '260px minmax(0, 1fr)',
+            gap: isMobile ? '14px' : '20px',
             alignItems: 'start',
           }}
         >
@@ -2190,10 +2202,11 @@ function App() {
             subtitle="Gestión de clientes, pagos y cobranza"
             userName={currentUser.nombre}
             userRole={currentUser.rol}
+            isMobile={isMobile}
             onLogout={() => void performLogout()}
           />
 
-          <main style={{ minWidth: 0, width: '100%', paddingLeft: '6px' }}>
+          <main style={{ minWidth: 0, width: '100%', paddingLeft: isMobile ? 0 : '6px' }}>
             <div style={{ marginBottom: '16px' }}>
               {error && <Alert type="error" text={error} />}
               {success && <Alert type="success" text={success} />}
@@ -2209,7 +2222,7 @@ function App() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
+                    gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
                     gap: '18px',
                     marginBottom: '24px',
                     alignItems: 'stretch',
@@ -2361,7 +2374,7 @@ function App() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                    gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(auto-fit, minmax(320px, 1fr))',
                     gap: '16px',
                     marginBottom: '16px',
                   }}
@@ -2405,7 +2418,7 @@ function App() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                    gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(auto-fit, minmax(300px, 1fr))',
                     gap: '16px',
                   }}
                 >
@@ -2612,7 +2625,7 @@ function App() {
                           <div
                             style={{
                               display: 'grid',
-                              gridTemplateColumns: 'repeat(2, minmax(280px, 1fr))',
+                              gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
                               columnGap: '18px',
                               rowGap: '18px',
                               alignItems: 'start',
@@ -2634,7 +2647,7 @@ function App() {
                               <div
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: '150px minmax(0, 1fr)',
+                                  gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : '150px minmax(0, 1fr)',
                                   gap: '12px',
                                 }}
                               >
@@ -2756,7 +2769,7 @@ function App() {
                               <div
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                  gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
                                   gap: '10px',
                                 }}
                               >
@@ -2908,7 +2921,7 @@ function App() {
                                 <div
                                   style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                                    gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(3, minmax(0, 1fr))',
                                     gap: '12px',
                                   }}
                                 >
@@ -4204,7 +4217,7 @@ function App() {
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
                       gap: '16px',
                       marginBottom: '22px',
                     }}

@@ -14,6 +14,7 @@ type SidebarNavProps = {
   subtitle: string
   userName?: string
   userRole?: string
+  isMobile?: boolean
   onLogout: () => void
 }
 
@@ -25,6 +26,7 @@ export function SidebarNav({
   subtitle,
   userName,
   userRole,
+  isMobile = false,
   onLogout,
 }: SidebarNavProps) {
   return (
@@ -35,11 +37,11 @@ export function SidebarNav({
         borderRight: '1px solid #1e293b',
         borderBottom: '1px solid #1e293b',
         borderLeft: 'none',
-        borderRadius: '0 24px 24px 0',
-        minHeight: 'calc(100vh - 32px)',
+        borderRadius: isMobile ? '20px' : '0 24px 24px 0',
+        minHeight: isMobile ? 'auto' : 'calc(100vh - 32px)',
         padding: '18px 0',
-        position: 'sticky',
-        top: '16px',
+        position: isMobile ? 'static' : 'sticky',
+        top: isMobile ? 0 : '16px',
         boxShadow: '0 10px 30px rgba(0,0,0,0.30)',
         width: '100%',
         display: 'flex',
