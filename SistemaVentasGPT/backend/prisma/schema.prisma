@@ -46,35 +46,36 @@ model HistorialBaja {
 }
 
 model WhatsAppLog {
-  id           Int      @id @default(autoincrement())
-  ventaId      Int?
+  id            Int       @id @default(autoincrement())
+  ventaId       Int?
   clienteNombre String?
   telefono      String?
   fechaObjetivo DateTime?
   estado        String?
   detalle       String?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 }
 
 model Venta {
-  id                   Int           @id @default(autoincrement())
+  id                   Int         @id @default(autoincrement())
   clienteId            Int
   cuentaAccesoId       Int?
   fechaInicio          DateTime
   fechaCierre          DateTime
   fechaPago            DateTime?
-  monto                Decimal       @db.Decimal(10, 2)
-  descuento            Decimal       @default(0) @db.Decimal(10, 2)
-  montoPagado          Decimal?      @db.Decimal(10, 2)
-  estado               EstadoVenta   @default(PENDIENTE)
+  monto                Decimal     @db.Decimal(10, 2)
+  descuento            Decimal     @default(0) @db.Decimal(10, 2)
+  montoPagado          Decimal?    @db.Decimal(10, 2)
+  estado               EstadoVenta @default(PENDIENTE)
   tipoDispositivo      String
   cantidadDispositivos Int
   observacion          String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   cliente      Cliente       @relation(fields: [clienteId], references: [id])
   cuentaAcceso CuentaAcceso? @relation(fields: [cuentaAccesoId], references: [id])
+  pagos        Pago[]
 
   @@unique([clienteId, fechaInicio, fechaCierre])
   @@index([fechaInicio])
@@ -95,4 +96,74 @@ model ConfiguracionSistema {
   clave     String   @id
   valor     String?
   updatedAt DateTime @updatedAt
+}
+
+model UsuarioSistema {
+  id           Int        @id @default(autoincrement())
+  nombre       String
+  correo       String     @unique
+  passwordHash String
+  rol          RolUsuario @default(OPERADOR)
+  activo       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  sesiones    SesionSistema[]
+  pagos       Pago[]
+  actividades ActividadSistema[]
+}
+
+model SesionSistema {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuario UsuarioSistema @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiresAt])
+}
+
+model Pago {
+  id           Int      @id @default(autoincrement())
+  ventaId      Int
+  usuarioId    Int?
+  monto        Decimal  @db.Decimal(10, 2)
+  fechaPago    DateTime
+  mesesPagados Int      @default(1)
+  observacion  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  venta   Venta           @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  usuario UsuarioSistema? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([ventaId])
+  @@index([usuarioId])
+  @@index([fechaPago])
+}
+
+model ActividadSistema {
+  id          Int      @id @default(autoincrement())
+  usuarioId   Int?
+  accion      String
+  entidad     String
+  entidadId   Int?
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  usuario UsuarioSistema? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId])
+  @@index([entidad])
+  @@index([accion])
+  @@index([createdAt])
+}
+
+enum RolUsuario {
+  ADMIN
+  OPERADOR
 }
