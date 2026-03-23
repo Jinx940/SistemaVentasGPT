@@ -15,6 +15,7 @@ type IconName =
   | 'whatsapp'
   | 'pago'
   | 'login'
+  | 'menu'
 
 type AppIconProps = {
   name: IconName
@@ -154,6 +155,14 @@ export function AppIcon({ name, size = 18, style }: AppIconProps) {
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
           <path d="m10 17 5-5-5-5" />
           <path d="M15 12H3" />
+        </svg>
+      )
+    case 'menu':
+      return (
+        <svg {...props}>
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
         </svg>
       )
     default:

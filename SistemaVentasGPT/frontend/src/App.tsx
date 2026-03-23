@@ -465,6 +465,7 @@ function App() {
   const [paymentMonto, setPaymentMonto] = useState('')
   const [paymentMeses, setPaymentMeses] = useState<'1' | '2'>('1')
   const [paymentFecha, setPaymentFecha] = useState(getTodayIso())
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const isMobile = viewportWidth < 960
   const isPhone = viewportWidth < 640
 
@@ -474,6 +475,12 @@ function App() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileNavOpen(false)
+    }
+  }, [isMobile])
 
   useEffect(() => {
     dashboardRangeRef.current = buildDashboardParams(dashboardDateFrom, dashboardDateTo)
@@ -2048,6 +2055,17 @@ function App() {
       ] as Array<{ key: TabKey; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }>,
     [isAdmin]
   )
+  const activeNavItem = useMemo(
+    () => visibleNavItems.find((item) => item.key === activeTab) ?? visibleNavItems[0],
+    [activeTab, visibleNavItems]
+  )
+
+  function handleTabSelect(key: TabKey) {
+    setActiveTab(key)
+    if (isMobile) {
+      setMobileNavOpen(false)
+    }
+  }
 
   if (!authReady) {
     return (
@@ -2194,19 +2212,140 @@ function App() {
             alignItems: 'start',
           }}
         >
-          <SidebarNav
-            activeKey={activeTab}
-            items={visibleNavItems}
-            onSelect={(key) => setActiveTab(key as TabKey)}
-            title="SISTEMA DE COBRO"
-            subtitle="Gestión de clientes, pagos y cobranza"
-            userName={currentUser.nombre}
-            userRole={currentUser.rol}
-            isMobile={isMobile}
-            onLogout={() => void performLogout()}
-          />
+          {!isMobile && (
+            <SidebarNav
+              activeKey={activeTab}
+              items={visibleNavItems}
+              onSelect={(key) => handleTabSelect(key as TabKey)}
+              title="SISTEMA DE COBRO"
+              subtitle="Gestión de clientes, pagos y cobranza"
+              userName={currentUser.nombre}
+              userRole={currentUser.rol}
+              isMobile={false}
+              onLogout={() => void performLogout()}
+            />
+          )}
 
           <main style={{ minWidth: 0, width: '100%', paddingLeft: isMobile ? 0 : '6px' }}>
+            {isMobile && (
+              <div style={{ marginBottom: '14px' }}>
+                <div
+                  style={{
+                    ...cardStyle,
+                    padding: '14px 16px',
+                    display: 'grid',
+                    gap: '12px',
+                    background:
+                      'radial-gradient(circle at top left, rgba(59,130,246,0.16), transparent 40%), linear-gradient(135deg, rgba(15,23,42,0.98), rgba(12,18,34,0.96))',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          color: '#60a5fa',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          letterSpacing: '0.12em',
+                          textTransform: 'uppercase',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        Sistema de Cobro
+                      </div>
+                      <div
+                        style={{
+                          color: '#f8fafc',
+                          fontSize: '20px',
+                          fontWeight: 800,
+                          lineHeight: 1.15,
+                        }}
+                      >
+                        {activeNavItem?.label || 'Dashboard'}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMobileNavOpen((prev) => !prev)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '11px 14px',
+                        borderRadius: '14px',
+                        border: '1px solid rgba(96,165,250,0.35)',
+                        background: mobileNavOpen ? 'rgba(37,99,235,0.22)' : 'rgba(15,23,42,0.9)',
+                        color: '#f8fafc',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <AppIcon name="menu" />
+                      {mobileNavOpen ? 'Ocultar menú' : 'Abrir menú'}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <div style={{ color: '#cbd5e1', fontSize: '14px' }}>
+                      {currentUser.nombre} · {currentUser.rol}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void performLogout()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 12px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(248,113,113,0.24)',
+                        background: 'rgba(127,29,29,0.18)',
+                        color: '#fecaca',
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <AppIcon name="logout" />
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </div>
+
+                {mobileNavOpen && (
+                  <div style={{ marginTop: '12px' }}>
+                    <SidebarNav
+                      activeKey={activeTab}
+                      items={visibleNavItems}
+                      onSelect={(key) => handleTabSelect(key as TabKey)}
+                      title="Menú"
+                      subtitle="Toca una sección y el menú se ocultará automáticamente."
+                      userName={currentUser.nombre}
+                      userRole={currentUser.rol}
+                      isMobile
+                      onLogout={() => void performLogout()}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ marginBottom: '16px' }}>
               {error && <Alert type="error" text={error} />}
               {success && <Alert type="success" text={success} />}
