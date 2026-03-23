@@ -322,13 +322,39 @@ async function setConfigValue(clave, valor) {
 async function getWhatsAppSettings() {
   const cfg = await getConfigMap();
 
+  function readSetting(dbValue, envValue = '') {
+    const dbText = cleanText(dbValue);
+    if (dbText) return dbText;
+    return cleanText(envValue);
+  }
+
+  const enabledRaw = readSetting(
+    cfg.WA_ENABLED,
+    process.env.WA_ENABLED || 'false'
+  );
+
   return {
-    enabled: String(cfg.WA_ENABLED || 'false').toLowerCase() === 'true',
-    graphVersion: cfg.WA_GRAPH_VERSION || 'v23.0',
-    phoneNumberId: cfg.WA_PHONE_NUMBER_ID || '',
-    accessToken: cfg.WA_ACCESS_TOKEN || '',
-    templateName: cfg.WA_TEMPLATE_NAME || 'gpt_plus_vence_hoy',
-    langCode: cfg.WA_LANG_CODE || 'es_PE',
+    enabled: enabledRaw.toLowerCase() === 'true',
+    graphVersion: readSetting(
+      cfg.WA_GRAPH_VERSION,
+      process.env.WA_GRAPH_VERSION || 'v23.0'
+    ),
+    phoneNumberId: readSetting(
+      cfg.WA_PHONE_NUMBER_ID,
+      process.env.WA_PHONE_NUMBER_ID || ''
+    ),
+    accessToken: readSetting(
+      cfg.WA_ACCESS_TOKEN,
+      process.env.WA_ACCESS_TOKEN || ''
+    ),
+    templateName: readSetting(
+      cfg.WA_TEMPLATE_NAME,
+      process.env.WA_TEMPLATE_NAME || 'gpt_plus_vence_hoy'
+    ),
+    langCode: readSetting(
+      cfg.WA_LANG_CODE,
+      process.env.WA_LANG_CODE || 'es_PE'
+    ),
   };
 }
 
@@ -396,6 +422,29 @@ async function upsertClienteFromVenta(body, clienteId = null) {
   if (clienteId) {
     return prisma.cliente.update({
       where: { id: clienteId },
+      data: clienteData,
+    });
+  }
+
+  const bodyClienteId = Number(body.clienteId || body.cliente_id || 0);
+
+  if (bodyClienteId) {
+    return prisma.cliente.update({
+      where: { id: bodyClienteId },
+      data: clienteData,
+    });
+  }
+
+  const telefono = cleanText(clienteData.telefono);
+
+  const clienteExistente = await prisma.cliente.findFirst({
+    where: { telefono },
+    orderBy: { id: 'desc' },
+  });
+
+  if (clienteExistente) {
+    return prisma.cliente.update({
+      where: { id: clienteExistente.id },
       data: clienteData,
     });
   }
@@ -1404,135 +1453,9 @@ const PORT = 3001;
 
 app.get('/dashboard/resumen', async (req, res) => {
   try {
-    const ventas = await prisma.venta.findMany({
-      include: {
-        cliente: true,
-        cuentaAcceso: true,
-      },
-      orderBy: { id: 'desc' },
-    });
-
-    const cuentas = await prisma.cuentaAcceso.findMany({
-      where: { activa: true },
-    });
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let pagados = 0;
-    let pendientes = 0;
-    let mensajesEnviados = 0;
-    let vencenHoy = 0;
-    let vencidos = 0;
-    let montoCobrado = 0;
-
-    const porCorreoMap = {};
-
-    for (const cuenta of cuentas) {
-      porCorreoMap[cuenta.correo] = {
-        correo: cuenta.correo,
-        activa: cuenta.activa,
-        clientes: 0,
-        pagados: 0,
-        pendientes: 0,
-        mensajesEnviados: 0,
-        ingresos: 0,
-        costoChatGPT: cuenta.activa ? COSTO_POR_CORREO : 0,
-        neto: 0,
-      };
-    }
-
-    for (const venta of ventas) {
-      const montoNeto = Math.max(
-        0,
-        moneyNumber(venta.monto) - moneyNumber(venta.descuento)
-      );
-      const estadoUi = toUiEstado(venta.estado);
-      const correo = venta.cuentaAcceso?.correo || '';
-      const cierre = new Date(venta.fechaCierre);
-      cierre.setHours(0, 0, 0, 0);
-
-      if (estadoUi === 'Pagado') {
-        pagados++;
-        montoCobrado += montoNeto;
-      } else if (estadoUi === 'Pendiente') {
-        pendientes++;
-      } else if (estadoUi === 'Mensaje enviado') {
-        mensajesEnviados++;
-      }
-
-      if (estadoUi !== 'Pagado' && estadoUi !== 'Baja') {
-        if (cierre.getTime() === today.getTime()) vencenHoy++;
-        if (cierre.getTime() < today.getTime()) vencidos++;
-      }
-
-      if (correo) {
-        if (!porCorreoMap[correo]) {
-          porCorreoMap[correo] = {
-            correo,
-            activa: false,
-            clientes: 0,
-            pagados: 0,
-            pendientes: 0,
-            mensajesEnviados: 0,
-            ingresos: 0,
-            costoChatGPT: 0,
-            neto: 0,
-          };
-        }
-
-        porCorreoMap[correo].clientes++;
-
-        if (estadoUi === 'Pagado') {
-          porCorreoMap[correo].pagados++;
-          porCorreoMap[correo].ingresos += montoNeto;
-        } else if (estadoUi === 'Pendiente') {
-          porCorreoMap[correo].pendientes++;
-        } else if (estadoUi === 'Mensaje enviado') {
-          porCorreoMap[correo].mensajesEnviados++;
-        }
-      }
-    }
-
-    const porCorreo = Object.values(porCorreoMap).map((item) => ({
-      ...item,
-      ingresos: Number(item.ingresos.toFixed(2)),
-      neto: Number((item.ingresos - item.costoChatGPT).toFixed(2)),
-    }));
-
-    const totalCorreos = cuentas.length;
-    const costoChatGPT = totalCorreos * COSTO_POR_CORREO;
-    const neto = montoCobrado - costoChatGPT;
-
-    const bajas = await prisma.historialBaja.count();
-
-    res.json({
-      totalClientes: ventas.length,
-      totalCorreos,
-      pagados,
-      pendientes,
-      mensajesEnviados,
-      vencenHoy,
-      vencidos,
-      bajas,
-      pendientesHoy: ventas.filter((v) => {
-        const cierre = new Date(v.fechaCierre);
-        cierre.setHours(0, 0, 0, 0);
-        return cierre.getTime() === today.getTime() && toUiEstado(v.estado) === 'Pendiente';
-      }).length,
-      mensajesHoy: ventas.filter((v) => {
-        const cierre = new Date(v.fechaCierre);
-        cierre.setHours(0, 0, 0, 0);
-        return (
-          cierre.getTime() === today.getTime() &&
-          toUiEstado(v.estado) === 'Mensaje enviado'
-        );
-      }).length,
-      totalIngresos: Number(montoCobrado.toFixed(2)),
-      costoChatGPT: Number(costoChatGPT.toFixed(2)),
-      neto: Number(neto.toFixed(2)),
-      porCorreo,
-    });
+    const { month, year } = parseDashboardMonthYear(req.query);
+    const data = await buildDashboardData({ month, year });
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al cargar dashboard.' });
