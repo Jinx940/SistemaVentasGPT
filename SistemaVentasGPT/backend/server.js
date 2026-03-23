@@ -1114,7 +1114,7 @@ app.get('/ventas', async (req, res) => {
       orderBy: { id: 'desc' },
     });
 
-    res.json(ventas);
+    res.json(ventas.map((venta, index) => formatVentaForUi(venta, index + 1)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al listar ventas.' });
@@ -1145,7 +1145,7 @@ app.post('/ventas', async (req, res) => {
       },
     });
 
-    res.json(venta);
+    res.json(formatVentaForUi(venta));
   } catch (error) {
     console.error(error);
     res.status(400).json({ error: error.message || 'Error al crear venta.' });
@@ -1197,7 +1197,7 @@ app.put('/ventas/:id', async (req, res) => {
       ventaDespues: venta,
     });
 
-    res.json(venta);
+    res.json(formatVentaForUi(venta));
   } catch (error) {
     console.error(error);
     res.status(400).json({ error: error.message || 'Error al actualizar venta.' });
