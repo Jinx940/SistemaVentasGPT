@@ -75,6 +75,8 @@ export type WhatsAppConfig = {
   webhookUrl: string
   webhookVerifyToken: string
   notifyPhone: string
+  replyAlertTemplateName: string
+  replyAlertLangCode: string
   templateName: string
   langCode: string
   dueTodayTemplateName: string
@@ -243,6 +245,8 @@ export type WhatsAppConfigPayload = {
   webhookUrl: string
   webhookVerifyToken: string
   notifyPhone: string
+  replyAlertTemplateName: string
+  replyAlertLangCode: string
   templateName: string
   langCode: string
   dueTodayTemplateName: string

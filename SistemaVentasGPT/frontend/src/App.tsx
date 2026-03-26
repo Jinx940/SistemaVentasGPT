@@ -548,6 +548,8 @@ function App() {
     webhookUrl: '',
     webhookVerifyToken: 'sistema-cobro-whatsapp',
     notifyPhone: '',
+    replyAlertTemplateName: '',
+    replyAlertLangCode: 'es_PE',
     templateName: 'gpt_vence_hoy',
     langCode: 'es_PE',
     dueTodayTemplateName: 'gpt_vence_hoy',
@@ -2003,6 +2005,8 @@ function App() {
             webhookUrl: normalizedWebhookUrl,
             webhookVerifyToken: whatsAppConfig.webhookVerifyToken,
             notifyPhone: whatsAppConfig.notifyPhone,
+            replyAlertTemplateName: whatsAppConfig.replyAlertTemplateName,
+            replyAlertLangCode: whatsAppConfig.replyAlertLangCode,
             templateName: whatsAppConfig.dueTodayTemplateName,
             langCode: whatsAppConfig.dueTodayLangCode,
             dueTodayTemplateName: whatsAppConfig.dueTodayTemplateName,
@@ -4777,6 +4781,22 @@ function App() {
                           setWhatsAppConfig((prev) => ({ ...prev, notifyPhone: e.target.value }))
                         }
                         placeholder="Numero para alertas de respuesta (+51989267132)"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.replyAlertTemplateName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, replyAlertTemplateName: e.target.value }))
+                        }
+                        placeholder="Plantilla alerta respuesta"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.replyAlertLangCode}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, replyAlertLangCode: e.target.value }))
+                        }
+                        placeholder="Idioma alerta respuesta"
                         style={inputStyle}
                       />
                       <input

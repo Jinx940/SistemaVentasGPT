@@ -849,6 +849,14 @@ async function getWhatsAppSettings() {
     cfg.WA_NOTIFY_PHONE ||
     process.env.WA_NOTIFY_PHONE ||
     '';
+  const replyAlertTemplateName =
+    cfg.WA_TEMPLATE_REPLY_ALERT_NAME ||
+    process.env.WA_TEMPLATE_REPLY_ALERT_NAME ||
+    '';
+  const replyAlertLangCode =
+    cfg.WA_TEMPLATE_REPLY_ALERT_LANG ||
+    process.env.WA_TEMPLATE_REPLY_ALERT_LANG ||
+    dueTodayLangCode;
 
   return {
     enabled: String(cfg.WA_ENABLED || process.env.WA_ENABLED || 'false').toLowerCase() === 'true',
@@ -878,6 +886,8 @@ async function getWhatsAppSettings() {
     webhookUrl,
     webhookVerifyToken,
     notifyPhone,
+    replyAlertTemplateName,
+    replyAlertLangCode,
   };
 }
 
@@ -1246,6 +1256,15 @@ function getWhatsAppTemplateConfig(cfg, mode = 'due_today') {
     };
   }
 
+  if (mode === 'reply_alert') {
+    return {
+      templateName: cleanText(cfg?.replyAlertTemplateName),
+      langCode: cleanText(cfg?.replyAlertLangCode),
+      templateLabel: 'WA_TEMPLATE_REPLY_ALERT_NAME',
+      langLabel: 'WA_TEMPLATE_REPLY_ALERT_LANG',
+    };
+  }
+
   return {
     templateName: cleanText(cfg?.dueTodayTemplateName || cfg?.templateName),
     langCode: cleanText(cfg?.dueTodayLangCode || cfg?.langCode),
@@ -1576,6 +1595,39 @@ async function sendWhatsAppTemplateMessage({ toDigits, mode = 'due_today', param
         },
       ],
     },
+  });
+}
+
+function buildOwnerDecisionAlertParameters({
+  clienteNombre,
+  clienteTelefono,
+  decision,
+  rawText,
+}) {
+  return [
+    { type: 'text', text: String(clienteNombre || 'Cliente sin nombre') },
+    { type: 'text', text: String(clienteTelefono || '') },
+    { type: 'text', text: String(decision || '') },
+    { type: 'text', text: String(rawText || '') },
+  ];
+}
+
+async function sendWhatsAppOwnerDecisionTemplate({
+  toDigits,
+  clienteNombre,
+  clienteTelefono,
+  decision,
+  rawText,
+}) {
+  return sendWhatsAppTemplateMessage({
+    toDigits,
+    mode: 'reply_alert',
+    parameters: buildOwnerDecisionAlertParameters({
+      clienteNombre,
+      clienteTelefono,
+      decision,
+      rawText,
+    }),
   });
 }
 
@@ -3144,6 +3196,8 @@ app.get('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
       webhookUrl: cfg.webhookUrl,
       webhookVerifyToken: cfg.webhookVerifyToken,
       notifyPhone: cfg.notifyPhone,
+      replyAlertTemplateName: cfg.replyAlertTemplateName,
+      replyAlertLangCode: cfg.replyAlertLangCode,
       templateName: cfg.templateName,
       langCode: cfg.langCode,
       dueTodayTemplateName: cfg.dueTodayTemplateName,
@@ -3186,6 +3240,10 @@ app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
     const accessUpdateLangCode = cleanText(
       req.body.accessUpdateLangCode || dueTodayLangCode || 'es_PE'
     );
+    const replyAlertTemplateName = cleanText(req.body.replyAlertTemplateName || '');
+    const replyAlertLangCode = cleanText(
+      req.body.replyAlertLangCode || dueTodayLangCode || 'es_PE'
+    );
 
     await setConfigValue('WA_GRAPH_VERSION', cleanText(req.body.graphVersion || 'v23.0'));
     await setConfigValue('WA_PHONE_NUMBER_ID', cleanText(req.body.phoneNumberId || ''));
@@ -3205,6 +3263,8 @@ app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
     await setConfigValue('WA_TEMPLATE_OVERDUE_LANG', overdueLangCode);
     await setConfigValue('WA_TEMPLATE_ACCESS_UPDATE_NAME', accessUpdateTemplateName);
     await setConfigValue('WA_TEMPLATE_ACCESS_UPDATE_LANG', accessUpdateLangCode);
+    await setConfigValue('WA_TEMPLATE_REPLY_ALERT_NAME', replyAlertTemplateName);
+    await setConfigValue('WA_TEMPLATE_REPLY_ALERT_LANG', replyAlertLangCode);
     await setConfigValue('WA_SERVICE_RESUME_DATE', cleanText(req.body.serviceResumeDate || '01/03'));
     await setConfigValue('WA_PAYMENT_METHODS', cleanText(req.body.paymentMethods || 'Yape / Plin'));
     await setConfigValue('WA_PAYMENT_PHONE', cleanText(req.body.paymentPhone || '950275766'));
@@ -4157,10 +4217,23 @@ app.post('/webhooks/whatsapp', async (req, res) => {
           });
 
           try {
-            await sendWhatsAppTextMessage({
-              toDigits: notifyPhoneDigits,
-              body: alertText,
-            });
+            if (
+              cleanText(waConfig.replyAlertTemplateName) &&
+              cleanText(waConfig.replyAlertLangCode)
+            ) {
+              await sendWhatsAppOwnerDecisionTemplate({
+                toDigits: notifyPhoneDigits,
+                clienteNombre,
+                clienteTelefono: telefono,
+                decision,
+                rawText: detalle,
+              });
+            } else {
+              await sendWhatsAppTextMessage({
+                toDigits: notifyPhoneDigits,
+                body: alertText,
+              });
+            }
 
             await prisma.whatsAppLog.create({
               data: {
