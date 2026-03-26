@@ -217,6 +217,22 @@ function toISODateUi(value) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function getStartOfToday(baseDate = new Date()) {
+  const today = new Date(baseDate);
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function getVentaDateOnly(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 function getMonthRangeByName(monthName) {
   const idx = MONTH_SHEETS.findIndex(
     (m) => m.toLowerCase() === String(monthName || '').trim().toLowerCase()
@@ -288,6 +304,48 @@ function getVentaMontoNeto(venta) {
   const monto = Number(venta?.monto || 0);
   const descuento = Number(venta?.descuento || 0);
   return Math.max(0, monto - descuento);
+}
+
+function getVentaEstadoActual(venta, baseDate = new Date()) {
+  const estado = cleanText(venta?.estado);
+
+  if (estado === 'BAJA') return 'BAJA';
+  if (estado === 'MENSAJE_ENVIADO') return 'MENSAJE_ENVIADO';
+
+  const cierre = getVentaDateOnly(venta?.fechaCierre);
+  if (!cierre) return estado || 'PENDIENTE';
+
+  const today = getStartOfToday(baseDate);
+  return cierre.getTime() < today.getTime() ? 'PENDIENTE' : 'PAGADO';
+}
+
+function isVentaDueToday(venta, baseDate = new Date()) {
+  const estado = getVentaEstadoActual(venta, baseDate);
+  if (estado === 'BAJA') return false;
+
+  const cierre = getVentaDateOnly(venta?.fechaCierre);
+  const today = getStartOfToday(baseDate);
+
+  return !!cierre && cierre.getTime() === today.getTime();
+}
+
+function isVentaOverdue(venta, baseDate = new Date()) {
+  const estado = getVentaEstadoActual(venta, baseDate);
+  if (estado !== 'PENDIENTE' && estado !== 'MENSAJE_ENVIADO') return false;
+
+  const cierre = getVentaDateOnly(venta?.fechaCierre);
+  const today = getStartOfToday(baseDate);
+
+  return !!cierre && cierre.getTime() < today.getTime();
+}
+
+function getVentaMesReferencia(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return `${MONTH_SHEETS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function toIsoDateTime(value) {
@@ -405,7 +463,8 @@ function toVentaDto(venta, no = null) {
     monto: moneyNumber(venta.monto),
     descuento: moneyNumber(venta.descuento),
     montoPagado: venta.montoPagado == null ? null : moneyNumber(venta.montoPagado),
-    estado: cleanText(venta.estado),
+    estado: getVentaEstadoActual(venta),
+    mesReferencia: getVentaMesReferencia(venta.fechaCierre),
     tipoDispositivo: venta.tipoDispositivo || '',
     cantidadDispositivos: Number(venta.cantidadDispositivos || 0),
     observacion: venta.observacion || null,
@@ -483,8 +542,8 @@ function getSingleDayRange(value) {
   };
 }
 
-function isVentaPendiente(venta) {
-  const estado = cleanText(venta.estado);
+function isVentaPendiente(venta, baseDate = new Date()) {
+  const estado = getVentaEstadoActual(venta, baseDate);
   return estado !== 'PAGADO' && estado !== 'BAJA';
 }
 
@@ -521,17 +580,19 @@ async function upsertClienteFromVenta(body, clienteId = null) {
   });
 }
 
-function buildVentaData(body) {
+function buildVentaData(body, options = {}) {
   const fechaInicio = parseLocalDate(body.fechaInicio || body.fecha_inicio);
   const fechaCierre = parseLocalDate(body.fechaCierre || body.fecha_cierre);
-  const fechaPago =
+  let fechaPago =
     body.fechaPago || body.fecha_pago
       ? parseLocalDate(body.fechaPago || body.fecha_pago)
       : null;
 
   const monto = round2(Number(body.monto ?? body.montoCliente ?? body.monto_cliente));
   const descuento = round2(Number(body.descuento || 0));
-  const estado = toDbEstado(body.estado || 'Pendiente');
+  const requestedEstado = toDbEstado(body.estado || options.defaultEstado || 'PAGADO');
+  const defaultEstado = cleanText(options.defaultEstado || 'PAGADO') || 'PAGADO';
+  const currentEstado = cleanText(options.currentEstado);
   const tiposRaw = body.tipoDispositivo || body.tipo_dispositivo;
 
   const tipos = Array.isArray(tiposRaw)
@@ -574,12 +635,20 @@ function buildVentaData(body) {
     throw new Error('cantidadDispositivos debe ser mayor a 0.');
   }
 
+  let estado = requestedEstado || defaultEstado;
+
+  if (currentEstado === 'BAJA' && !cleanText(body.estado)) {
+    estado = 'BAJA';
+  } else if (estado !== 'BAJA' && estado !== 'MENSAJE_ENVIADO') {
+    estado = defaultEstado;
+  }
+
   if (!ESTADOS.includes(estado)) {
     throw new Error('Estado inválido.');
   }
 
   if (estado === 'PAGADO' && !fechaPago) {
-    throw new Error('fechaPago es obligatoria cuando el estado es PAGADO.');
+    fechaPago = new Date(fechaInicio);
   }
 
   return {
@@ -588,6 +657,7 @@ function buildVentaData(body) {
     fechaPago,
     monto,
     descuento,
+    montoPagado: estado === 'PAGADO' ? round2(Math.max(0, monto - descuento)) : null,
     estado,
     tipoDispositivo,
     cantidadDispositivos,
@@ -850,7 +920,7 @@ async function buildPagosResumen(limit = 5) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
 
-  const [pagos, ventasPendientes] = await Promise.all([
+  const [pagos, ventasActivas] = await Promise.all([
     prisma.pago.findMany({
       include: {
         venta: {
@@ -864,7 +934,7 @@ async function buildPagosResumen(limit = 5) {
     prisma.venta.findMany({
       where: {
         estado: {
-          in: ['PENDIENTE', 'MENSAJE_ENVIADO'],
+          not: 'BAJA',
         },
       },
       include: {
@@ -876,7 +946,9 @@ async function buildPagosResumen(limit = 5) {
   const topDeudoresMap = {};
   let deudaPendienteTotal = 0;
 
-  for (const venta of ventasPendientes) {
+  for (const venta of ventasActivas) {
+    if (!isVentaPendiente(venta, now)) continue;
+
     const clienteId = venta.clienteId;
     const montoNeto = getVentaMontoNeto(venta);
     deudaPendienteTotal += montoNeto;
@@ -1244,6 +1316,7 @@ function buildVentasWhereFromQuery(query) {
   const and = [];
   const search = cleanText(query.search);
   const estadoRaw = cleanText(query.estado);
+  const estadoFilter = ESTADOS.includes(toDbEstado(estadoRaw)) ? toDbEstado(estadoRaw) : '';
   const correo = normalizeEmail(query.correo);
   const legacyMonth = cleanText(query.month);
   const legacyYear = cleanText(query.year);
@@ -1272,13 +1345,6 @@ function buildVentasWhereFromQuery(query) {
         lt: dayRange.end,
       },
     });
-  }
-
-  if (estadoRaw) {
-    const estado = toDbEstado(estadoRaw);
-    if (ESTADOS.includes(estado)) {
-      and.push({ estado });
-    }
   }
 
   if (correo) {
@@ -1357,7 +1423,10 @@ function buildVentasWhereFromQuery(query) {
     where.AND = and;
   }
 
-  return where;
+  return {
+    where,
+    estadoFilter,
+  };
 }
 
 function buildDashboardMetrics({ ventas, cuentas, totalClientes, scope }) {
@@ -1391,7 +1460,7 @@ function buildDashboardMetrics({ ventas, cuentas, totalClientes, scope }) {
   }
 
   for (const venta of ventas) {
-    const estado = cleanText(venta.estado);
+    const estado = getVentaEstadoActual(venta, today);
     const monto = moneyNumber(venta.monto);
     const descuento = moneyNumber(venta.descuento);
     const montoNeto = getVentaMontoNeto(venta);
@@ -1411,17 +1480,10 @@ function buildDashboardMetrics({ ventas, cuentas, totalClientes, scope }) {
       bajas++;
     }
 
-    const cierre = venta.fechaCierre ? new Date(venta.fechaCierre) : null;
-    if (cierre) {
-      cierre.setHours(0, 0, 0, 0);
-
-      if (isVentaPendiente(venta)) {
-        if (cierre.getTime() === today.getTime()) {
-          vencenHoy++;
-        } else if (cierre.getTime() < today.getTime()) {
-          vencidos++;
-        }
-      }
+    if (isVentaDueToday(venta, today)) {
+      vencenHoy++;
+    } else if (isVentaOverdue(venta, today)) {
+      vencidos++;
     }
 
     if (correo) {
@@ -1461,26 +1523,12 @@ function buildDashboardMetrics({ ventas, cuentas, totalClientes, scope }) {
   const netoEstimado = montoTotal - descuentoTotal;
 
   const dueTodayRows = ventas
-    .filter((venta) => {
-      if (!isVentaPendiente(venta)) return false;
-
-      const cierre = new Date(venta.fechaCierre);
-      cierre.setHours(0, 0, 0, 0);
-
-      return cierre.getTime() === today.getTime();
-    })
+    .filter((venta) => isVentaDueToday(venta, today))
     .sort(compareByFechaCierreAsc)
     .map((venta, index) => toVentaDto(venta, index + 1));
 
   const overdueRows = ventas
-    .filter((venta) => {
-      if (!isVentaPendiente(venta)) return false;
-
-      const cierre = new Date(venta.fechaCierre);
-      cierre.setHours(0, 0, 0, 0);
-
-      return cierre.getTime() < today.getTime();
-    })
+    .filter((venta) => isVentaOverdue(venta, today))
     .sort(compareByFechaCierreAsc)
     .map((venta, index) => toVentaDto(venta, index + 1));
 
@@ -2536,25 +2584,26 @@ app.delete('/cuentas/:id', requireRole('ADMIN'), async (req, res) => {
 
 app.get('/ventas', requireAuth, async (req, res) => {
   try {
-    const where = buildVentasWhereFromQuery(req.query);
+    const { where, estadoFilter } = buildVentasWhereFromQuery(req.query);
     const { page, pageSize, skip, take } = parsePagination(req.query);
 
-    const [ventas, total] = await Promise.all([
-      prisma.venta.findMany({
-        where,
-        include: SAFE_VENTA_INCLUDE,
-        orderBy: [
-          { fechaInicio: 'desc' },
-          { id: 'desc' },
-        ],
-        skip,
-        take,
-      }),
-      prisma.venta.count({ where }),
-    ]);
+    const ventas = await prisma.venta.findMany({
+      where,
+      include: SAFE_VENTA_INCLUDE,
+      orderBy: [
+        { fechaInicio: 'desc' },
+        { id: 'desc' },
+      ],
+    });
+
+    const ventasFiltradas = estadoFilter
+      ? ventas.filter((venta) => getVentaEstadoActual(venta) === estadoFilter)
+      : ventas;
+    const pageItems = ventasFiltradas.slice(skip, skip + take);
+    const total = ventasFiltradas.length;
 
     res.json({
-      items: ventas.map((venta, index) => toVentaDto(venta, skip + index + 1)),
+      items: pageItems.map((venta, index) => toVentaDto(venta, skip + index + 1)),
       total,
       page,
       pageSize,
@@ -2570,7 +2619,7 @@ app.get('/ventas', requireAuth, async (req, res) => {
 
 app.post('/ventas', requireAuth, async (req, res) => {
   try {
-    const baseData = buildVentaData(req.body);
+    const baseData = buildVentaData(req.body, { defaultEstado: 'PAGADO' });
     const assignmentMode = cleanText(req.body.assignmentMode || 'auto');
 
     const cliente = await upsertClienteFromVenta(req.body);
@@ -2644,7 +2693,10 @@ app.put('/ventas/:id', requireAuth, async (req, res) => {
 
     await upsertClienteFromVenta(req.body, actual.clienteId);
 
-    const baseData = buildVentaData(req.body);
+    const baseData = buildVentaData(req.body, {
+      defaultEstado: cleanText(actual.estado) === 'BAJA' ? 'BAJA' : 'PAGADO',
+      currentEstado: actual.estado,
+    });
     const assignmentMode = cleanText(req.body.assignmentMode || 'auto');
 
     const cuentaAccesoId = await resolveAssignedAccount({
@@ -2726,10 +2778,15 @@ app.post('/ventas/:id/pagar', requireAuth, async (req, res) => {
       });
     }
 
+    const siguienteFechaInicio = addMonthsPreserveDay(actual.fechaInicio, mesesPagados);
+    const siguienteFechaCierre = addMonthsPreserveDay(actual.fechaCierre, mesesPagados);
+
     const venta = await prisma.$transaction(async (tx) => {
       const ventaActualizada = await tx.venta.update({
         where: { id },
         data: {
+          fechaInicio: siguienteFechaInicio,
+          fechaCierre: siguienteFechaCierre,
           estado: 'PAGADO',
           fechaPago,
           monto: montoMensual,
@@ -2753,21 +2810,6 @@ app.post('/ventas/:id/pagar', requireAuth, async (req, res) => {
       });
 
       return ventaActualizada;
-    });
-
-    for (let offset = 1; offset < mesesPagados; offset += 1) {
-      await upsertVentaPagadaEnPeriodo({
-        ventaBase: actual,
-        monthOffset: offset,
-        fechaPago,
-        montoMensual,
-      });
-    }
-
-    await ensureVentaPendienteSiguiente({
-      ventaBase: actual,
-      monthOffset: mesesPagados,
-      montoMensual,
     });
 
     await registrarActividad({
@@ -2957,7 +2999,9 @@ app.post('/whatsapp/send-due-today', requireRole('ADMIN'), async (req, res) => {
 
     const ventas = await prisma.venta.findMany({
       where: {
-        estado: 'PENDIENTE',
+        estado: {
+          not: 'BAJA',
+        },
       },
       include: {
         cliente: true,
@@ -2973,10 +3017,7 @@ app.post('/whatsapp/send-due-today', requireRole('ADMIN'), async (req, res) => {
     let errors = 0;
 
     for (const venta of ventas) {
-      const cierre = new Date(venta.fechaCierre);
-      cierre.setHours(0, 0, 0, 0);
-
-      if (cierre.getTime() !== today.getTime()) {
+      if (!isVentaDueToday(venta, today) || cleanText(venta.estado) === 'MENSAJE_ENVIADO') {
         skipped++;
         continue;
       }

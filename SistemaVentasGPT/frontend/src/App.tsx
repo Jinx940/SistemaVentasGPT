@@ -15,6 +15,7 @@ import {
   getDashboardResumen,
   getErrorMessage,
   getHealthStatus,
+  getStoredAuthToken,
   getHistorialBajas,
   getMe,
   getPagos,
@@ -74,7 +75,16 @@ import { HistorySection } from './components/history-section'
 import { SidebarNav } from './components/sidebar'
 import { AuthCard } from './components/auth-card'
 import { AppIcon } from './components/icons'
-import { formatCurrencyPen, formatDateDisplay, getDaysOverdue, normalizeText, toInputDate } from './utils/ui'
+import {
+  addMonthsToInputDate,
+  formatCurrencyPen,
+  formatDateDisplay,
+  formatMonthYearLabel,
+  getDaysOverdue,
+  normalizePhoneForLookup,
+  normalizeText,
+  toInputDate,
+} from './utils/ui'
 
 type TabKey =
   | 'dashboard'
@@ -168,7 +178,6 @@ type WhatsAppTestFormState = {
 }
 
 const ESTADOS = ['PENDIENTE', 'PAGADO', 'MENSAJE_ENVIADO', 'BAJA']
-const ESTADOS_FORM = ['PENDIENTE', 'PAGADO', 'MENSAJE_ENVIADO', 'BAJA']
 const DISPOSITIVOS = ['PC', 'Laptop', 'Celular', 'Tablet', 'Otro']
 const DISPOSITIVO_OTRO = 'Otro'
 const PRESET_DEVICE_OPTIONS = DISPOSITIVOS.filter((item) => item !== DISPOSITIVO_OTRO)
@@ -208,7 +217,7 @@ const emptyVentaForm: VentaFormState = {
   fechaPago: '',
   monto: '',
   descuento: '',
-  estado: 'PENDIENTE',
+  estado: 'PAGADO',
   tipoDispositivo: '',
   otroTipoDispositivo: '',
   cantidadDispositivos: '',
@@ -421,6 +430,7 @@ function App() {
   const [cuentaForm, setCuentaForm] = useState(emptyCuentaForm)
   const [ventaForm, setVentaForm] = useState(emptyVentaForm)
   const [telefonoPais, setTelefonoPais] = useState(defaultPhoneCountry.dialCode)
+  const [ventaFechaCierreAuto, setVentaFechaCierreAuto] = useState(true)
 
   const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppConfig>({
     enabled: false,
@@ -485,6 +495,18 @@ function App() {
   useEffect(() => {
     dashboardRangeRef.current = buildDashboardParams(dashboardDateFrom, dashboardDateTo)
   }, [dashboardDateFrom, dashboardDateTo])
+
+  const matchedClienteByPhone = useMemo(() => {
+    const fullPhone = buildTelefonoValue(telefonoPais, ventaForm.telefono)
+    const normalizedPhone =
+      normalizePhoneForLookup(fullPhone) || normalizePhoneForLookup(ventaForm.telefono)
+
+    if (!normalizedPhone) return null
+
+    return (
+      clientes.find((cliente) => normalizePhoneForLookup(cliente.telefono) === normalizedPhone) || null
+    )
+  }, [clientes, telefonoPais, ventaForm.telefono])
 
   async function cargarClientes() {
     try {
@@ -765,17 +787,35 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
+    async function loadHealthStatus() {
+      try {
+        const health = await getHealthStatus()
+
+        if (cancelled) return
+
+        setHealthStatus(health)
+        if (typeof health.setupRequired === 'boolean') {
+          setSetupRequired(health.setupRequired)
+        }
+      } catch {
+        if (!cancelled) {
+          setHealthStatus(null)
+        }
+      }
+    }
+
+    void loadHealthStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authCheckNonce])
+
+  useEffect(() => {
+    let cancelled = false
+
     async function checkAuth() {
       try {
-        const health = await getHealthStatus().catch(() => null)
-
-        if (!cancelled && health) {
-          setHealthStatus(health)
-          if (typeof health.setupRequired === 'boolean') {
-            setSetupRequired(health.setupRequired)
-          }
-        }
-
         const status = await getAuthStatus()
 
         if (cancelled) return
@@ -783,7 +823,13 @@ function App() {
         setSetupRequired(status.setupRequired)
 
         if (status.setupRequired) {
-          setAuthReady(true)
+          setCurrentUser(null)
+          return
+        }
+
+        const storedToken = getStoredAuthToken()
+        if (!storedToken) {
+          setCurrentUser(null)
           return
         }
 
@@ -794,21 +840,18 @@ function App() {
 
           setCurrentUser(me.user)
         } catch (error) {
-          if (!cancelled && !isUnauthorizedError(error)) {
+          if (cancelled) return
+
+          clearStoredAuthToken()
+          setCurrentUser(null)
+
+          if (!isUnauthorizedError(error)) {
             setError(getErrorMessage(error, 'Error verificando tu sesión.'))
           }
         }
       } catch (error) {
         if (!cancelled) {
-          const health = await getHealthStatus().catch(() => null)
-
-          if (health) {
-            setHealthStatus(health)
-            if (typeof health.setupRequired === 'boolean') {
-              setSetupRequired(health.setupRequired)
-            }
-          }
-
+          setCurrentUser(null)
           setError(getErrorMessage(error, 'Error inicializando la autenticación.'))
         }
       } finally {
@@ -824,6 +867,31 @@ function App() {
       cancelled = true
     }
   }, [authCheckNonce])
+
+  useEffect(() => {
+    if (!matchedClienteByPhone) return
+
+    setVentaForm((prev) => {
+      const next = {
+        ...prev,
+        cliente: matchedClienteByPhone.nombre || '',
+        monto: String(matchedClienteByPhone.monto ?? ''),
+        carpeta: matchedClienteByPhone.carpeta || '',
+        observacion: matchedClienteByPhone.observacion || '',
+      }
+
+      if (
+        next.cliente === prev.cliente &&
+        next.monto === prev.monto &&
+        next.carpeta === prev.carpeta &&
+        next.observacion === prev.observacion
+      ) {
+        return prev
+      }
+
+      return next
+    })
+  }, [matchedClienteByPhone])
 
   useEffect(() => {
     if (!currentUser) {
@@ -1252,6 +1320,34 @@ function App() {
       return
     }
 
+    if (name === 'telefono') {
+      setVentaForm((prev) => ({ ...prev, telefono: value.replace(/\D/g, '') }))
+      return
+    }
+
+    if (name === 'fechaInicio') {
+      setVentaForm((prev) => {
+        const shouldSyncFechaPago = !prev.fechaPago || prev.fechaPago === prev.fechaInicio
+
+        return {
+          ...prev,
+          fechaInicio: value,
+          fechaCierre:
+            ventaFechaCierreAuto || !prev.fechaCierre
+              ? addMonthsToInputDate(value, 1)
+              : prev.fechaCierre,
+          fechaPago: shouldSyncFechaPago ? value : prev.fechaPago,
+        }
+      })
+      return
+    }
+
+    if (name === 'fechaCierre') {
+      setVentaFechaCierreAuto(false)
+      setVentaForm((prev) => ({ ...prev, fechaCierre: value }))
+      return
+    }
+
     setVentaForm((prev) => ({ ...prev, [name]: value }))
   }
 
@@ -1269,6 +1365,7 @@ function App() {
     setVentaForm(emptyVentaForm)
     setEditingVentaId(null)
     setTelefonoPais(defaultPhoneCountry.dialCode)
+    setVentaFechaCierreAuto(true)
   }
 
   async function submitGuardarCliente() {
@@ -1408,15 +1505,13 @@ function App() {
       throw new Error('Selecciona al menos un dispositivo.')
     }
 
-    if (ventaForm.estado === 'PAGADO' && !ventaForm.fechaPago) {
-      throw new Error('Selecciona la fecha de pago para una venta pagada.')
-    }
-
     const payload: VentaPayload = {
       ...ventaForm,
       telefono: telefonoCompleto,
+      fechaPago: ventaForm.fechaPago || ventaForm.fechaInicio,
       monto: Number(ventaForm.monto),
       descuento: Number(ventaForm.descuento || 0),
+      estado: ventaForm.estado === 'BAJA' ? 'BAJA' : 'PAGADO',
       tipoDispositivo: selectedDevices,
       cantidadDispositivos: selectedDevices.length,
       cuentaAccesoId:
@@ -1517,12 +1612,14 @@ function App() {
     setTelefonoPais(phone.dialCode)
 
     setEditingVentaId(venta.id)
+    const fechaInicio = toInputDate(venta.fechaInicio)
+    const fechaCierre = toInputDate(venta.fechaCierre)
     setVentaForm({
       cliente: venta.cliente?.nombre || '',
       telefono: phone.local || '',
       carpeta: venta.cliente?.carpeta || '',
-      fechaInicio: toInputDate(venta.fechaInicio),
-      fechaCierre: toInputDate(venta.fechaCierre),
+      fechaInicio,
+      fechaCierre,
       fechaPago: toInputDate(venta.fechaPago),
       monto: String(venta.monto ?? ''),
       descuento: String(venta.descuento ?? 0),
@@ -1534,6 +1631,7 @@ function App() {
       assignmentMode: venta.cuentaAccesoId ? 'manual' : 'auto',
       cuentaAccesoId: venta.cuentaAccesoId ? String(venta.cuentaAccesoId) : '',
     })
+    setVentaFechaCierreAuto(!!fechaInicio && !!fechaCierre && addMonthsToInputDate(fechaInicio, 1) === fechaCierre)
     setActiveTab('registro')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -1850,14 +1948,6 @@ function App() {
 
     return Array.from(values).sort((a, b) => a.localeCompare(b))
   }, [cuentas, ventas])
-
-  function handleEstadoSelect(estado: string) {
-    setVentaForm((prev) => ({
-      ...prev,
-      estado,
-      fechaPago: estado === 'PAGADO' ? prev.fechaPago || getTodayIso() : prev.fechaPago,
-    }))
-  }
 
   function handleTipoDispositivoSelect(tipo: string) {
     setVentaForm((prev) => {
@@ -2671,6 +2761,7 @@ function App() {
                             <th style={thStyle}>Teléfono</th>
                             <th style={thStyle}>Cuenta</th>
                             <th style={thStyle}>Cierre</th>
+                            <th style={thStyle}>Mes pendiente</th>
                             <th style={thStyle}>Días de atraso</th>
                             <th style={thStyle}>Monto neto</th>
                             <th style={thStyle}>Estado</th>
@@ -2686,6 +2777,7 @@ function App() {
                               <td style={tdStyle}>{venta.cliente?.telefono || '-'}</td>
                               <td style={tdStyle}>{venta.cuentaAcceso?.correo || '-'}</td>
                               <td style={tdStyle}>{formatDateDisplay(venta.fechaCierre)}</td>
+                              <td style={tdStyle}>{formatMonthYearLabel(venta.fechaCierre)}</td>
                               <td style={tdStyle}>{getDaysOverdue(venta.fechaCierre)} días</td>
                               <td style={tdStyle}>{formatCurrencyPen(Number(venta.monto || 0) - Number(venta.descuento || 0))}</td>
                               <td style={tdStyle}>
@@ -2736,7 +2828,7 @@ function App() {
                       <div style={{ marginBottom: '14px' }}>
                         <h2 style={{ marginTop: 0, color: '#f8fafc' }}>Registrar / Editar venta</h2>
                         <p style={{ marginTop: '6px', color: '#94a3b8', fontSize: '14px' }}>
-                          Guarda ventas, fechas de cobro y estado de seguimiento.
+                          Registra el mes activo del cliente. La venta se guarda pagada y luego pasa a pendiente automáticamente cuando vence.
                         </p>
                       </div>
 
@@ -2802,37 +2894,51 @@ function App() {
                                   ))}
                                 </select>
 
-                                <input
-                                  name="telefono"
-                                  placeholder="Ej: 950000000"
-                                  value={ventaForm.telefono}
-                                  onChange={handleVentaChange}
-                                  style={inputStyle}
-                                />
-                              </div>
-                            </div>
+                                 <input
+                                   name="telefono"
+                                   placeholder="Ej: 950000000"
+                                   value={ventaForm.telefono}
+                                   onChange={handleVentaChange}
+                                   style={inputStyle}
+                                 />
+                               </div>
+                               {matchedClienteByPhone && (
+                                 <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px' }}>
+                                   Cliente encontrado: se cargaron automáticamente nombre, monto, carpeta y observación de{' '}
+                                   <b>{matchedClienteByPhone.nombre}</b>.
+                                 </div>
+                               )}
+                             </div>
 
                             <div>
                               <label style={formLabelStyle}>Fecha de inicio *</label>
-                              <input
-                                type="date"
-                                name="fechaInicio"
-                                value={ventaForm.fechaInicio}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
+                               <input
+                                 type="date"
+                                 name="fechaInicio"
+                                 value={ventaForm.fechaInicio}
+                                 onChange={handleVentaChange}
+                                 style={inputStyle}
+                               />
+                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                 Al elegir la fecha de inicio, el sistema propone automáticamente 1 mes para la fecha de cierre.
+                               </div>
+                             </div>
 
                             <div>
                               <label style={formLabelStyle}>Fecha de cierre *</label>
-                              <input
-                                type="date"
-                                name="fechaCierre"
-                                value={ventaForm.fechaCierre}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
+                               <input
+                                 type="date"
+                                 name="fechaCierre"
+                                 value={ventaForm.fechaCierre}
+                                 onChange={handleVentaChange}
+                                 style={inputStyle}
+                               />
+                               {ventaForm.fechaCierre && (
+                                 <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                   Mes de referencia: <b style={{ color: '#f8fafc' }}>{formatMonthYearLabel(ventaForm.fechaCierre)}</b>
+                                 </div>
+                               )}
+                             </div>
 
                             <div>
                               <label style={formLabelStyle}>Monto (S/.) *</label>
@@ -2858,50 +2964,39 @@ function App() {
                               />
                             </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Fecha de pago</label>
-                              <input
-                                type="date"
-                                name="fechaPago"
+                             <div>
+                               <label style={formLabelStyle}>Fecha de pago</label>
+                               <input
+                                 type="date"
+                                 name="fechaPago"
                                 value={ventaForm.fechaPago}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
+                                 onChange={handleVentaChange}
+                                 style={inputStyle}
+                               />
+                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                 Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.
+                               </div>
+                             </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Estado *</label>
-                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', paddingTop: '2px' }}>
-                                {ESTADOS_FORM.map((estado) => (
-                                  <button
-                                    key={estado}
-                                    type="button"
-                                    onClick={() => handleEstadoSelect(estado)}
-                                    style={{
-                                      padding: '8px 12px',
-                                      borderRadius: '999px',
-                                      border:
-                                        ventaForm.estado === estado
-                                          ? '1px solid #60a5fa'
-                                          : '1px solid #334155',
-                                      background: ventaForm.estado === estado ? '#13233f' : 'transparent',
-                                      color: '#e5e7eb',
-                                      cursor: 'pointer',
-                                      fontWeight: 700,
-                                      fontSize: '12px',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    {estado}
-                                  </button>
-                                ))}
-                              </div>
-                              {ventaForm.estado === 'PAGADO' && (
-                                <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px' }}>
-                                  Una venta pagada debe conservar fecha de pago. Si no la eliges, no se guardará.
-                                </div>
-                              )}
-                            </div>
+                             <div>
+                               <label style={formLabelStyle}>Estado automático</label>
+                               <div
+                                 style={{
+                                   ...inputStyle,
+                                   background: '#0b1730',
+                                   display: 'flex',
+                                   alignItems: 'center',
+                                   minHeight: '48px',
+                                 }}
+                               >
+                                 {ventaForm.estado === 'BAJA' ? 'BAJA' : 'PAGADO hasta la fecha de cierre'}
+                               </div>
+                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                 {ventaForm.estado === 'BAJA'
+                                   ? 'Esta venta está marcada como baja.'
+                                   : 'Cuando pase la fecha de cierre, el sistema la mostrará como pendiente de forma automática.'}
+                               </div>
+                             </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
                               <label style={formLabelStyle}>Tipo de dispositivo</label>
@@ -3243,6 +3338,7 @@ function App() {
                               <th style={thStyle}>Teléfono</th>
                               <th style={thStyle}>Inicio</th>
                               <th style={thStyle}>Cierre</th>
+                              <th style={thStyle}>Mes ref.</th>
                               <th style={thStyle}>Monto</th>
                               <th style={thStyle}>Descuento</th>
                               <th style={thStyle}>Pago</th>
@@ -3263,6 +3359,7 @@ function App() {
                                 <td style={tdStyle}>{venta.cliente?.telefono || '-'}</td>
                                 <td style={tdStyle}>{formatDateDisplay(venta.fechaInicio)}</td>
                                 <td style={tdStyle}>{formatDateDisplay(venta.fechaCierre)}</td>
+                                <td style={tdStyle}>{formatMonthYearLabel(venta.fechaCierre)}</td>
                                 <td style={tdStyle}>S/. {Number(venta.monto).toFixed(2)}</td>
                                 <td style={tdStyle}>S/. {Number(venta.descuento).toFixed(2)}</td>
                                 <td style={tdStyle}>{formatDateDisplay(venta.fechaPago)}</td>
@@ -3276,7 +3373,7 @@ function App() {
                                 <td style={tdStyle}>{venta.cuentaAcceso?.correo || '-'}</td>
                                 <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                                   <div style={actionsStyle}>
-                                    {venta.estado === 'PENDIENTE' && (
+                                    {(venta.estado === 'PENDIENTE' || venta.estado === 'MENSAJE_ENVIADO') && (
                                       <button
                                         type="button"
                                         onClick={() => registrarPagoVenta(venta)}
@@ -4348,7 +4445,7 @@ function App() {
                     <div style={{ flex: 1 }}>
                       <h3 style={modalTitleStyle}>Registrar pago</h3>
                       <p style={modalTextStyle}>
-                        El monto se calcula automáticamente con el precio fijo del cliente. Solo eliges si cancelarás 1 o 2 meses y la fecha de pago.
+                        El monto se calcula automáticamente con el precio fijo del cliente. Al guardar, el sistema extenderá el ciclo 1 o 2 meses desde la fecha actual de cierre.
                       </p>
                     </div>
                   </div>
