@@ -800,23 +800,36 @@ async function setConfigValue(clave, valor) {
 
 async function getWhatsAppSettings() {
   const cfg = await getConfigMap();
+  const defaultGraphVersion = 'v25.0';
+  const defaultPhoneNumberId = '977660538773451';
+  const defaultWebhookUrl = 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp';
+  const defaultWebhookVerifyToken = 'sistema-cobro-whatsapp';
+  const defaultNotifyPhone = '989267132';
+  const defaultDueTodayTemplateName = 'gpt_vence_hoy';
+  const defaultDueTomorrowTemplateName = 'gpt_vence_manana';
+  const defaultOverdueTemplateName = 'gpt_plus_vencido';
+  const defaultReplyAlertTemplateName = 'gpt_alerta_respuesta';
+  const defaultLangCode = 'es_PE';
+  const defaultPaymentMethods = 'Yape / Plin';
+  const defaultPaymentPhone = '950275766';
+  const defaultPaymentContactName = 'Jesus Dominguez';
 
   const dueTodayTemplateName =
     cfg.WA_TEMPLATE_DUE_TODAY_NAME ||
     cfg.WA_TEMPLATE_NAME ||
     process.env.WA_TEMPLATE_DUE_TODAY_NAME ||
     process.env.WA_TEMPLATE_NAME ||
-    'gpt_vence_hoy';
+    defaultDueTodayTemplateName;
   const dueTodayLangCode =
     cfg.WA_TEMPLATE_DUE_TODAY_LANG ||
     cfg.WA_LANG_CODE ||
     process.env.WA_TEMPLATE_DUE_TODAY_LANG ||
     process.env.WA_LANG_CODE ||
-    'es_PE';
+    defaultLangCode;
   const dueTomorrowTemplateName =
     cfg.WA_TEMPLATE_DUE_TOMORROW_NAME ||
     process.env.WA_TEMPLATE_DUE_TOMORROW_NAME ||
-    '';
+    defaultDueTomorrowTemplateName;
   const dueTomorrowLangCode =
     cfg.WA_TEMPLATE_DUE_TOMORROW_LANG ||
     process.env.WA_TEMPLATE_DUE_TOMORROW_LANG ||
@@ -832,7 +845,7 @@ async function getWhatsAppSettings() {
   const overdueTemplateName =
     cfg.WA_TEMPLATE_OVERDUE_NAME ||
     process.env.WA_TEMPLATE_OVERDUE_NAME ||
-    '';
+    defaultOverdueTemplateName;
   const overdueLangCode =
     cfg.WA_TEMPLATE_OVERDUE_LANG ||
     process.env.WA_TEMPLATE_OVERDUE_LANG ||
@@ -840,19 +853,19 @@ async function getWhatsAppSettings() {
   const webhookVerifyToken =
     cfg.WA_WEBHOOK_VERIFY_TOKEN ||
     process.env.WA_WEBHOOK_VERIFY_TOKEN ||
-    'sistema-cobro-whatsapp';
+    defaultWebhookVerifyToken;
   const webhookUrl =
     cfg.WA_WEBHOOK_URL ||
     process.env.WA_WEBHOOK_URL ||
-    '';
+    defaultWebhookUrl;
   const notifyPhone =
     cfg.WA_NOTIFY_PHONE ||
     process.env.WA_NOTIFY_PHONE ||
-    '';
+    defaultNotifyPhone;
   const replyAlertTemplateName =
     cfg.WA_TEMPLATE_REPLY_ALERT_NAME ||
     process.env.WA_TEMPLATE_REPLY_ALERT_NAME ||
-    '';
+    defaultReplyAlertTemplateName;
   const replyAlertLangCode =
     cfg.WA_TEMPLATE_REPLY_ALERT_LANG ||
     process.env.WA_TEMPLATE_REPLY_ALERT_LANG ||
@@ -860,8 +873,8 @@ async function getWhatsAppSettings() {
 
   return {
     enabled: String(cfg.WA_ENABLED || process.env.WA_ENABLED || 'false').toLowerCase() === 'true',
-    graphVersion: cfg.WA_GRAPH_VERSION || process.env.WA_GRAPH_VERSION || 'v23.0',
-    phoneNumberId: cfg.WA_PHONE_NUMBER_ID || process.env.WA_PHONE_NUMBER_ID || '',
+    graphVersion: cfg.WA_GRAPH_VERSION || process.env.WA_GRAPH_VERSION || defaultGraphVersion,
+    phoneNumberId: cfg.WA_PHONE_NUMBER_ID || process.env.WA_PHONE_NUMBER_ID || defaultPhoneNumberId,
     accessToken: cfg.WA_ACCESS_TOKEN || process.env.WA_ACCESS_TOKEN || '',
     templateName: dueTodayTemplateName,
     langCode: dueTodayLangCode,
@@ -876,13 +889,13 @@ async function getWhatsAppSettings() {
     serviceResumeDate:
       cfg.WA_SERVICE_RESUME_DATE || process.env.WA_SERVICE_RESUME_DATE || '01/03',
     paymentMethods:
-      cfg.WA_PAYMENT_METHODS || process.env.WA_PAYMENT_METHODS || 'Yape / Plin',
+      cfg.WA_PAYMENT_METHODS || process.env.WA_PAYMENT_METHODS || defaultPaymentMethods,
     paymentPhone:
-      cfg.WA_PAYMENT_PHONE || process.env.WA_PAYMENT_PHONE || '950275766',
+      cfg.WA_PAYMENT_PHONE || process.env.WA_PAYMENT_PHONE || defaultPaymentPhone,
     paymentContactName:
       cfg.WA_PAYMENT_CONTACT_NAME ||
       process.env.WA_PAYMENT_CONTACT_NAME ||
-      'Jesus Dominguez',
+      defaultPaymentContactName,
     webhookUrl,
     webhookVerifyToken,
     notifyPhone,
@@ -3222,37 +3235,56 @@ app.get('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
 
 app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
   try {
+    const defaultGraphVersion = 'v25.0';
+    const defaultPhoneNumberId = '977660538773451';
+    const defaultWebhookUrl = 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp';
+    const defaultWebhookVerifyToken = 'sistema-cobro-whatsapp';
+    const defaultNotifyPhone = '989267132';
+    const defaultDueTodayTemplateName = 'gpt_vence_hoy';
+    const defaultDueTomorrowTemplateName = 'gpt_vence_manana';
+    const defaultOverdueTemplateName = 'gpt_plus_vencido';
+    const defaultReplyAlertTemplateName = 'gpt_alerta_respuesta';
+    const defaultLangCode = 'es_PE';
+    const defaultPaymentMethods = 'Yape / Plin';
+    const defaultPaymentPhone = '950275766';
+    const defaultPaymentContactName = 'Jesus Dominguez';
     const dueTodayTemplateName = cleanText(
-      req.body.dueTodayTemplateName || req.body.templateName || 'gpt_vence_hoy'
+      req.body.dueTodayTemplateName || req.body.templateName || defaultDueTodayTemplateName
     );
     const dueTodayLangCode = cleanText(
-      req.body.dueTodayLangCode || req.body.langCode || 'es_PE'
+      req.body.dueTodayLangCode || req.body.langCode || defaultLangCode
     );
-    const dueTomorrowTemplateName = cleanText(req.body.dueTomorrowTemplateName || '');
+    const dueTomorrowTemplateName = cleanText(
+      req.body.dueTomorrowTemplateName || defaultDueTomorrowTemplateName
+    );
     const dueTomorrowLangCode = cleanText(
-      req.body.dueTomorrowLangCode || dueTodayLangCode || 'es_PE'
+      req.body.dueTomorrowLangCode || dueTodayLangCode || defaultLangCode
     );
-    const overdueTemplateName = cleanText(req.body.overdueTemplateName || '');
+    const overdueTemplateName = cleanText(
+      req.body.overdueTemplateName || defaultOverdueTemplateName
+    );
     const overdueLangCode = cleanText(
-      req.body.overdueLangCode || dueTodayLangCode || 'es_PE'
+      req.body.overdueLangCode || dueTodayLangCode || defaultLangCode
     );
     const accessUpdateTemplateName = cleanText(req.body.accessUpdateTemplateName || '');
     const accessUpdateLangCode = cleanText(
-      req.body.accessUpdateLangCode || dueTodayLangCode || 'es_PE'
+      req.body.accessUpdateLangCode || dueTodayLangCode || defaultLangCode
     );
-    const replyAlertTemplateName = cleanText(req.body.replyAlertTemplateName || '');
+    const replyAlertTemplateName = cleanText(
+      req.body.replyAlertTemplateName || defaultReplyAlertTemplateName
+    );
     const replyAlertLangCode = cleanText(
-      req.body.replyAlertLangCode || dueTodayLangCode || 'es_PE'
+      req.body.replyAlertLangCode || dueTodayLangCode || defaultLangCode
     );
 
-    await setConfigValue('WA_GRAPH_VERSION', cleanText(req.body.graphVersion || 'v23.0'));
-    await setConfigValue('WA_PHONE_NUMBER_ID', cleanText(req.body.phoneNumberId || ''));
-    await setConfigValue('WA_WEBHOOK_URL', cleanText(req.body.webhookUrl || ''));
+    await setConfigValue('WA_GRAPH_VERSION', cleanText(req.body.graphVersion || defaultGraphVersion));
+    await setConfigValue('WA_PHONE_NUMBER_ID', cleanText(req.body.phoneNumberId || defaultPhoneNumberId));
+    await setConfigValue('WA_WEBHOOK_URL', cleanText(req.body.webhookUrl || defaultWebhookUrl));
     await setConfigValue(
       'WA_WEBHOOK_VERIFY_TOKEN',
-      cleanText(req.body.webhookVerifyToken || 'sistema-cobro-whatsapp')
+      cleanText(req.body.webhookVerifyToken || defaultWebhookVerifyToken)
     );
-    await setConfigValue('WA_NOTIFY_PHONE', cleanText(req.body.notifyPhone || ''));
+    await setConfigValue('WA_NOTIFY_PHONE', cleanText(req.body.notifyPhone || defaultNotifyPhone));
     await setConfigValue('WA_TEMPLATE_NAME', dueTodayTemplateName);
     await setConfigValue('WA_LANG_CODE', dueTodayLangCode);
     await setConfigValue('WA_TEMPLATE_DUE_TODAY_NAME', dueTodayTemplateName);
@@ -3266,11 +3298,11 @@ app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
     await setConfigValue('WA_TEMPLATE_REPLY_ALERT_NAME', replyAlertTemplateName);
     await setConfigValue('WA_TEMPLATE_REPLY_ALERT_LANG', replyAlertLangCode);
     await setConfigValue('WA_SERVICE_RESUME_DATE', cleanText(req.body.serviceResumeDate || '01/03'));
-    await setConfigValue('WA_PAYMENT_METHODS', cleanText(req.body.paymentMethods || 'Yape / Plin'));
-    await setConfigValue('WA_PAYMENT_PHONE', cleanText(req.body.paymentPhone || '950275766'));
+    await setConfigValue('WA_PAYMENT_METHODS', cleanText(req.body.paymentMethods || defaultPaymentMethods));
+    await setConfigValue('WA_PAYMENT_PHONE', cleanText(req.body.paymentPhone || defaultPaymentPhone));
     await setConfigValue(
       'WA_PAYMENT_CONTACT_NAME',
-      cleanText(req.body.paymentContactName || 'Jesus Dominguez')
+      cleanText(req.body.paymentContactName || defaultPaymentContactName)
     );
 
     if (cleanText(req.body.accessToken)) {
