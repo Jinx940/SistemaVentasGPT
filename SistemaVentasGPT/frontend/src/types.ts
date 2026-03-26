@@ -72,8 +72,23 @@ export type WhatsAppConfig = {
   enabled: boolean
   graphVersion: string
   phoneNumberId: string
+  webhookUrl: string
+  webhookVerifyToken: string
+  notifyPhone: string
   templateName: string
   langCode: string
+  dueTodayTemplateName: string
+  dueTodayLangCode: string
+  dueTomorrowTemplateName: string
+  dueTomorrowLangCode: string
+  overdueTemplateName: string
+  overdueLangCode: string
+  accessUpdateTemplateName: string
+  accessUpdateLangCode: string
+  serviceResumeDate: string
+  paymentMethods: string
+  paymentPhone: string
+  paymentContactName: string
   hasToken: boolean
 }
 
@@ -225,9 +240,35 @@ export type VentaPayload = {
 export type WhatsAppConfigPayload = {
   graphVersion: string
   phoneNumberId: string
+  webhookUrl: string
+  webhookVerifyToken: string
+  notifyPhone: string
   templateName: string
   langCode: string
+  dueTodayTemplateName: string
+  dueTodayLangCode: string
+  dueTomorrowTemplateName: string
+  dueTomorrowLangCode: string
+  overdueTemplateName: string
+  overdueLangCode: string
+  accessUpdateTemplateName: string
+  accessUpdateLangCode: string
+  serviceResumeDate: string
+  paymentMethods: string
+  paymentPhone: string
+  paymentContactName: string
   accessToken: string
+}
+
+export type WhatsAppReminderResponse = {
+  ok: true
+  sent: number
+  dueTomorrowSent: number
+  dueTodaySent: number
+  overdueSent: number
+  skipped: number
+  errors: number
+  message?: string
 }
 
 export type PagarVentaPayload = {
@@ -311,10 +352,12 @@ export type PagoResumenResponse = {
 
 export type WhatsAppTestPayload = {
   to: string
-  mode: 'configured' | 'hello_world'
+  mode: 'due_today' | 'due_tomorrow' | 'overdue' | 'access_update' | 'hello_world'
   cliente?: string
   fechaCierre?: string
   monto?: string
+  correoCuenta?: string
+  passwordCuenta?: string
 }
 
 export type WhatsAppTestResponse = {
@@ -324,5 +367,35 @@ export type WhatsAppTestResponse = {
   templateName?: string
   langCode?: string
   phoneNumberId?: string
+  messageId?: string | null
+}
+
+export type WhatsAppChatThread = {
+  telefono: string
+  clienteNombre: string
+  lastMessage: string
+  lastDirection: 'IN' | 'OUT'
+  lastStatus: string
+  lastAt?: string | null
+  unreadCount: number
+}
+
+export type WhatsAppChatMessage = {
+  id: number
+  telefono: string
+  clienteNombre: string
+  text: string
+  direction: 'IN' | 'OUT'
+  status: string
+  createdAt?: string | null
+}
+
+export type WhatsAppChatReplyPayload = {
+  text: string
+}
+
+export type WhatsAppChatReplyResponse = {
+  ok: true
+  to: string
   messageId?: string | null
 }

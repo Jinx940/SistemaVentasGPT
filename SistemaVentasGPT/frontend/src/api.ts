@@ -26,7 +26,12 @@ import type {
   VentasResponse,
   WhatsAppConfig,
   WhatsAppConfigPayload,
+  WhatsAppChatMessage,
+  WhatsAppChatReplyPayload,
+  WhatsAppChatReplyResponse,
+  WhatsAppChatThread,
   WhatsAppLog,
+  WhatsAppReminderResponse,
   WhatsAppTestPayload,
   WhatsAppTestResponse,
 } from './types'
@@ -279,7 +284,7 @@ export function setWhatsAppEnabled(enabled: boolean) {
 }
 
 export function sendWhatsAppDueToday() {
-  return apiFetch<{ ok: true; sent: number; skipped: number; errors: number; message?: string }>(
+  return apiFetch<WhatsAppReminderResponse>(
     '/whatsapp/send-due-today',
     { method: 'POST' }
   )
@@ -287,6 +292,22 @@ export function sendWhatsAppDueToday() {
 
 export function sendWhatsAppTest(payload: WhatsAppTestPayload) {
   return apiFetch<WhatsAppTestResponse>('/whatsapp/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getWhatsAppChats() {
+  return apiFetch<WhatsAppChatThread[]>('/whatsapp/chats')
+}
+
+export function getWhatsAppChatMessages(telefono: string) {
+  return apiFetch<WhatsAppChatMessage[]>(`/whatsapp/chats/${encodeURIComponent(telefono)}/messages`)
+}
+
+export function sendWhatsAppChatReply(telefono: string, payload: WhatsAppChatReplyPayload) {
+  return apiFetch<WhatsAppChatReplyResponse>(`/whatsapp/chats/${encodeURIComponent(telefono)}/reply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

@@ -23,6 +23,8 @@ import {
   getUsers,
   getVentas,
   getWhatsAppConfig,
+  getWhatsAppChatMessages,
+  getWhatsAppChats,
   getWhatsAppLogs,
   isUnauthorizedError,
   login,
@@ -35,6 +37,7 @@ import {
   saveVenta,
   saveWhatsAppConfig,
   sendWhatsAppDueToday,
+  sendWhatsAppChatReply,
   sendWhatsAppTest,
   setStoredAuthToken,
   setWhatsAppEnabled,
@@ -56,6 +59,8 @@ import type {
   Venta,
   VentaPayload,
   VentasResponse,
+  WhatsAppChatMessage,
+  WhatsAppChatThread,
   WhatsAppConfig,
   WhatsAppLog,
   WhatsAppTestResponse,
@@ -93,6 +98,7 @@ type TabKey =
   | 'ventas'
   | 'clientes'
   | 'cuentas'
+  | 'chats'
   | 'historial'
   | 'configuracion'
 
@@ -135,6 +141,7 @@ type VentaFormState = {
   fechaInicio: string
   fechaCierre: string
   fechaPago: string
+  pagoRegistrado: 'SI' | 'NO'
   monto: string
   descuento: string
   estado: string
@@ -171,10 +178,12 @@ type UserFormState = {
 
 type WhatsAppTestFormState = {
   to: string
-  mode: 'configured' | 'hello_world'
+  mode: 'due_today' | 'due_tomorrow' | 'overdue' | 'access_update' | 'hello_world'
   cliente: string
   fechaCierre: string
   monto: string
+  correoCuenta: string
+  passwordCuenta: string
 }
 
 const ESTADOS = ['PENDIENTE', 'PAGADO', 'MENSAJE_ENVIADO', 'BAJA']
@@ -215,6 +224,7 @@ const emptyVentaForm: VentaFormState = {
   fechaInicio: '',
   fechaCierre: '',
   fechaPago: '',
+  pagoRegistrado: 'SI',
   monto: '',
   descuento: '',
   estado: 'PAGADO',
@@ -287,10 +297,12 @@ const emptyUserForm: UserFormState = {
 
 const emptyWhatsAppTestForm: WhatsAppTestFormState = {
   to: '+51 ',
-  mode: 'configured',
+  mode: 'due_today',
   cliente: 'Cliente de prueba',
   fechaCierre: getTodayIso(),
   monto: '35.00',
+  correoCuenta: '',
+  passwordCuenta: '',
 }
 
 const emptyPagoResumen: PagoResumenResponse = {
@@ -343,11 +355,71 @@ function getTodayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function getWhatsAppModeLabel(mode: WhatsAppTestFormState['mode']) {
+  if (mode === 'due_tomorrow') return 'Vence manana'
+  if (mode === 'due_today') return 'Vence hoy'
+  if (mode === 'overdue') return 'Vencido'
+  if (mode === 'access_update') return 'Cambio de acceso'
+  return 'hello_world'
+}
+
+function getWhatsAppTestSuccessMessage(mode: WhatsAppTestFormState['mode']) {
+  if (mode === 'due_tomorrow') return 'Prueba del mensaje de vence manana enviada correctamente.'
+  if (mode === 'due_today') return 'Prueba del mensaje de vence hoy enviada correctamente.'
+  if (mode === 'overdue') return 'Prueba del mensaje de vencido enviada correctamente.'
+  if (mode === 'access_update') return 'Prueba del mensaje de cambio de acceso enviada correctamente.'
+  return 'Prueba hello_world enviada correctamente.'
+}
+
+function formatChatTimestamp(value?: string | null) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return date.toLocaleString('es-PE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function getVentaMontoMensual(venta?: Venta | null) {
   if (!venta) return 0
   const montoCliente = Number(venta.cliente?.monto || 0)
   if (montoCliente > 0) return montoCliente
   return Number(venta.monto || 0)
+}
+
+function getVentaStatusSummary(form: VentaFormState) {
+  if (form.estado === 'BAJA') {
+    return {
+      label: 'BAJA',
+      description: 'Esta venta está marcada como baja.',
+    }
+  }
+
+  if (form.pagoRegistrado === 'NO') {
+    return {
+      label: 'PENDIENTE hasta registrar pago',
+      description: 'Se guardará pendiente desde ahora y podrás marcarla como pagada después.',
+    }
+  }
+
+  const today = getTodayIso()
+  if (form.fechaCierre && today && form.fechaCierre < today) {
+    return {
+      label: 'PENDIENTE por vencimiento',
+      description: 'Este período ya venció. Aunque tuvo pago registrado, hoy ya aparece como pendiente.',
+    }
+  }
+
+  return {
+    label: 'PAGADO hasta la fecha de cierre',
+    description: 'Cuando pase la fecha de cierre, el sistema la mostrará como pendiente de forma automática.',
+  }
 }
 
 function getSelectedTipos(value: string) {
@@ -408,6 +480,8 @@ function App() {
   const [dashboardResumen, setDashboardResumen] = useState<DashboardResumenResponse | null>(null)
   const [historialBajas, setHistorialBajas] = useState<HistorialBaja[]>([])
   const [whatsAppLogs, setWhatsAppLogs] = useState<WhatsAppLog[]>([])
+  const [whatsAppChats, setWhatsAppChats] = useState<WhatsAppChatThread[]>([])
+  const [whatsAppChatMessages, setWhatsAppChatMessages] = useState<WhatsAppChatMessage[]>([])
   const [pagos, setPagos] = useState<Pago[]>([])
   const [pagosResumen, setPagosResumen] = useState<PagoResumenResponse>(emptyPagoResumen)
   const [actividad, setActividad] = useState<ActividadSistema[]>([])
@@ -418,6 +492,8 @@ function App() {
   const [loadingVentas, setLoadingVentas] = useState(true)
   const [loadingHistorial, setLoadingHistorial] = useState(true)
   const [loadingWhatsAppLogs, setLoadingWhatsAppLogs] = useState(true)
+  const [loadingWhatsAppChats, setLoadingWhatsAppChats] = useState(true)
+  const [loadingWhatsAppChatMessages, setLoadingWhatsAppChatMessages] = useState(false)
   const [loadingPagos, setLoadingPagos] = useState(true)
   const [loadingPagosResumen, setLoadingPagosResumen] = useState(true)
   const [loadingActividad, setLoadingActividad] = useState(true)
@@ -436,13 +512,31 @@ function App() {
     enabled: false,
     graphVersion: 'v23.0',
     phoneNumberId: '',
-    templateName: 'gpt_plus_vence_hoy',
+    webhookUrl: '',
+    webhookVerifyToken: 'sistema-cobro-whatsapp',
+    notifyPhone: '',
+    templateName: 'gpt_vence_hoy',
     langCode: 'es_PE',
+    dueTodayTemplateName: 'gpt_vence_hoy',
+    dueTodayLangCode: 'es_PE',
+    dueTomorrowTemplateName: '',
+    dueTomorrowLangCode: 'es_PE',
+    overdueTemplateName: '',
+    overdueLangCode: 'es_PE',
+    accessUpdateTemplateName: '',
+    accessUpdateLangCode: 'es_PE',
+    serviceResumeDate: '01/03',
+    paymentMethods: 'Yape / Plin',
+    paymentPhone: '950275766',
+    paymentContactName: 'Jesus Dominguez',
     hasToken: false,
   })
 
   const [whatsAppTokenInput, setWhatsAppTokenInput] = useState('')
   const [whatsAppTestForm, setWhatsAppTestForm] = useState<WhatsAppTestFormState>(emptyWhatsAppTestForm)
+  const [selectedWhatsAppChatPhone, setSelectedWhatsAppChatPhone] = useState('')
+  const [whatsAppReplyText, setWhatsAppReplyText] = useState('')
+  const [sendingWhatsAppReply, setSendingWhatsAppReply] = useState(false)
   const [editingClienteId, setEditingClienteId] = useState<number | null>(null)
   const [editingCuentaId, setEditingCuentaId] = useState<number | null>(null)
   const [editingVentaId, setEditingVentaId] = useState<number | null>(null)
@@ -640,6 +734,46 @@ function App() {
     }
   }
 
+  const cargarWhatsAppChats = useCallback(async (preferredPhone = '') => {
+    try {
+      setLoadingWhatsAppChats(true)
+      const data = await getWhatsAppChats()
+      setWhatsAppChats(data)
+
+      const normalizedPreferred = String(preferredPhone || selectedWhatsAppChatPhone)
+      const hasPreferred = normalizedPreferred && data.some((item) => item.telefono === normalizedPreferred)
+
+      if (hasPreferred) {
+        setSelectedWhatsAppChatPhone(normalizedPreferred)
+      } else if (!selectedWhatsAppChatPhone && data[0]?.telefono) {
+        setSelectedWhatsAppChatPhone(data[0].telefono)
+      } else if (selectedWhatsAppChatPhone && !data.some((item) => item.telefono === selectedWhatsAppChatPhone)) {
+        setSelectedWhatsAppChatPhone(data[0]?.telefono || '')
+      }
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error cargando conversaciones de WhatsApp.'))
+    } finally {
+      setLoadingWhatsAppChats(false)
+    }
+  }, [selectedWhatsAppChatPhone])
+
+  const cargarWhatsAppChatMessages = useCallback(async (telefono: string) => {
+    if (!telefono) {
+      setWhatsAppChatMessages([])
+      return
+    }
+
+    try {
+      setLoadingWhatsAppChatMessages(true)
+      const data = await getWhatsAppChatMessages(telefono)
+      setWhatsAppChatMessages(data)
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error cargando mensajes del chat.'))
+    } finally {
+      setLoadingWhatsAppChatMessages(false)
+    }
+  }, [])
+
   async function cargarPagos() {
     try {
       setLoadingPagos(true)
@@ -741,6 +875,10 @@ function App() {
       setSecurityInfo(null)
       setHistorialBajas([])
       setWhatsAppLogs([])
+      setWhatsAppChats([])
+      setWhatsAppChatMessages([])
+      setSelectedWhatsAppChatPhone('')
+      setWhatsAppReplyText('')
       setDashboardResumen(null)
       setLastWhatsAppTest(null)
       setPasswordForm(emptyPasswordForm)
@@ -894,11 +1032,36 @@ function App() {
   }, [matchedClienteByPhone])
 
   useEffect(() => {
+    if (!currentUser || activeTab !== 'chats') return
+    void cargarWhatsAppChats()
+  }, [activeTab, cargarWhatsAppChats, currentUser])
+
+  useEffect(() => {
+    if (!currentUser || activeTab !== 'chats' || !selectedWhatsAppChatPhone) return
+    void cargarWhatsAppChatMessages(selectedWhatsAppChatPhone)
+  }, [activeTab, cargarWhatsAppChatMessages, currentUser, selectedWhatsAppChatPhone])
+
+  useEffect(() => {
+    if (!currentUser || activeTab !== 'chats') return
+
+    const intervalId = window.setInterval(() => {
+      void cargarWhatsAppChats()
+      if (selectedWhatsAppChatPhone) {
+        void cargarWhatsAppChatMessages(selectedWhatsAppChatPhone)
+      }
+    }, 15000)
+
+    return () => window.clearInterval(intervalId)
+  }, [activeTab, cargarWhatsAppChatMessages, cargarWhatsAppChats, currentUser, selectedWhatsAppChatPhone])
+
+  useEffect(() => {
     if (!currentUser) {
       setLoadingClientes(false)
       setLoadingCuentas(false)
       setLoadingHistorial(false)
       setLoadingWhatsAppLogs(false)
+      setLoadingWhatsAppChats(false)
+      setLoadingWhatsAppChatMessages(false)
       setLoadingPagos(false)
       setLoadingPagosResumen(false)
       setLoadingActividad(false)
@@ -976,9 +1139,11 @@ function App() {
         if (!cancelled) {
           setLoadingClientes(false)
           setLoadingCuentas(false)
-          setLoadingHistorial(false)
-          setLoadingWhatsAppLogs(false)
-          setLoadingPagos(false)
+      setLoadingHistorial(false)
+      setLoadingWhatsAppLogs(false)
+      setLoadingWhatsAppChats(false)
+      setLoadingWhatsAppChatMessages(false)
+      setLoadingPagos(false)
           setLoadingPagosResumen(false)
           setLoadingActividad(false)
           setLoadingDashboard(false)
@@ -1327,7 +1492,8 @@ function App() {
 
     if (name === 'fechaInicio') {
       setVentaForm((prev) => {
-        const shouldSyncFechaPago = !prev.fechaPago || prev.fechaPago === prev.fechaInicio
+        const shouldSyncFechaPago =
+          prev.pagoRegistrado === 'SI' && (!prev.fechaPago || prev.fechaPago === prev.fechaInicio)
 
         return {
           ...prev,
@@ -1345,6 +1511,15 @@ function App() {
     if (name === 'fechaCierre') {
       setVentaFechaCierreAuto(false)
       setVentaForm((prev) => ({ ...prev, fechaCierre: value }))
+      return
+    }
+
+    if (name === 'pagoRegistrado') {
+      setVentaForm((prev) => ({
+        ...prev,
+        pagoRegistrado: value === 'NO' ? 'NO' : 'SI',
+        fechaPago: value === 'NO' ? '' : prev.fechaPago || prev.fechaInicio,
+      }))
       return
     }
 
@@ -1508,10 +1683,16 @@ function App() {
     const payload: VentaPayload = {
       ...ventaForm,
       telefono: telefonoCompleto,
-      fechaPago: ventaForm.fechaPago || ventaForm.fechaInicio,
+      fechaPago:
+        ventaForm.pagoRegistrado === 'SI' ? ventaForm.fechaPago || ventaForm.fechaInicio : '',
       monto: Number(ventaForm.monto),
       descuento: Number(ventaForm.descuento || 0),
-      estado: ventaForm.estado === 'BAJA' ? 'BAJA' : 'PAGADO',
+      estado:
+        ventaForm.estado === 'BAJA'
+          ? 'BAJA'
+          : ventaForm.pagoRegistrado === 'SI'
+            ? 'PAGADO'
+            : 'PENDIENTE',
       tipoDispositivo: selectedDevices,
       cantidadDispositivos: selectedDevices.length,
       cuentaAccesoId:
@@ -1621,6 +1802,7 @@ function App() {
       fechaInicio,
       fechaCierre,
       fechaPago: toInputDate(venta.fechaPago),
+      pagoRegistrado: venta.fechaPago ? 'SI' : 'NO',
       monto: String(venta.monto ?? ''),
       descuento: String(venta.descuento ?? 0),
       estado: venta.estado || 'PENDIENTE',
@@ -1770,8 +1952,23 @@ function App() {
           await saveWhatsAppConfig({
             graphVersion: whatsAppConfig.graphVersion,
             phoneNumberId: whatsAppConfig.phoneNumberId,
-            templateName: whatsAppConfig.templateName,
-            langCode: whatsAppConfig.langCode,
+            webhookUrl: whatsAppConfig.webhookUrl,
+            webhookVerifyToken: whatsAppConfig.webhookVerifyToken,
+            notifyPhone: whatsAppConfig.notifyPhone,
+            templateName: whatsAppConfig.dueTodayTemplateName,
+            langCode: whatsAppConfig.dueTodayLangCode,
+            dueTodayTemplateName: whatsAppConfig.dueTodayTemplateName,
+            dueTodayLangCode: whatsAppConfig.dueTodayLangCode,
+            dueTomorrowTemplateName: whatsAppConfig.dueTomorrowTemplateName,
+            dueTomorrowLangCode: whatsAppConfig.dueTomorrowLangCode,
+            overdueTemplateName: whatsAppConfig.overdueTemplateName,
+            overdueLangCode: whatsAppConfig.overdueLangCode,
+            accessUpdateTemplateName: whatsAppConfig.accessUpdateTemplateName,
+            accessUpdateLangCode: whatsAppConfig.accessUpdateLangCode,
+            serviceResumeDate: whatsAppConfig.serviceResumeDate,
+            paymentMethods: whatsAppConfig.paymentMethods,
+            paymentPhone: whatsAppConfig.paymentPhone,
+            paymentContactName: whatsAppConfig.paymentContactName,
             accessToken: whatsAppTokenInput,
           })
 
@@ -1814,8 +2011,8 @@ function App() {
     limpiarMensajes()
 
     openConfirmModal({
-      title: 'Enviar cobros de hoy',
-      message: 'Se ejecutará el envío manual de los cobros que vencen hoy.',
+      title: 'Enviar recordatorios',
+      message: 'Se ejecutará el envío manual de los mensajes que vencen mañana, hoy y vencidos.',
       type: 'info',
       confirmText: 'Ejecutar',
       onConfirm: async () => {
@@ -1823,7 +2020,7 @@ function App() {
           const result = await sendWhatsAppDueToday()
 
           setSuccess(
-            `Proceso ejecutado. Enviados: ${result.sent || 0}, omitidos: ${result.skipped || 0}, errores: ${result.errors || 0}.`
+            `Proceso ejecutado. Manana: ${result.dueTomorrowSent || 0}, hoy: ${result.dueTodaySent || 0}, vencidos: ${result.overdueSent || 0}, omitidos: ${result.skipped || 0}, errores: ${result.errors || 0}.${result.message ? ` ${result.message}.` : ''}`
           )
 
           await cargarVentas()
@@ -1847,19 +2044,51 @@ function App() {
         cliente: whatsAppTestForm.cliente,
         fechaCierre: whatsAppTestForm.fechaCierre,
         monto: whatsAppTestForm.monto,
+        correoCuenta: whatsAppTestForm.correoCuenta,
+        passwordCuenta: whatsAppTestForm.passwordCuenta,
       })
 
       setLastWhatsAppTest(result)
 
-      setSuccess(
-        result.mode === 'hello_world'
-          ? 'Prueba hello_world enviada correctamente.'
-          : 'Prueba con la plantilla configurada enviada correctamente.'
-      )
+      setSuccess(getWhatsAppTestSuccessMessage(whatsAppTestForm.mode))
       await cargarWhatsAppLogs()
       await cargarActividad()
     } catch (error) {
       setError(getErrorMessage(error, 'Error enviando la prueba de WhatsApp.'))
+    }
+  }
+
+  async function responderWhatsAppChat() {
+    limpiarMensajes()
+
+    if (!selectedWhatsAppChatPhone) {
+      setError('Selecciona una conversación para responder.')
+      return
+    }
+
+    if (!whatsAppReplyText.trim()) {
+      setError('Escribe un mensaje antes de responder.')
+      return
+    }
+
+    try {
+      setSendingWhatsAppReply(true)
+      await sendWhatsAppChatReply(selectedWhatsAppChatPhone, {
+        text: whatsAppReplyText,
+      })
+
+      setSuccess(`Respuesta enviada correctamente a ${selectedWhatsAppChatPhone}.`)
+      setWhatsAppReplyText('')
+      await Promise.all([
+        cargarWhatsAppChats(selectedWhatsAppChatPhone),
+        cargarWhatsAppChatMessages(selectedWhatsAppChatPhone),
+        cargarWhatsAppLogs(),
+        cargarActividad(),
+      ])
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error respondiendo el chat de WhatsApp.'))
+    } finally {
+      setSendingWhatsAppReply(false)
     }
   }
 
@@ -2130,7 +2359,15 @@ function App() {
   const ventasFiltradas = ventas
 
   const cantidadTiposSeleccionados = countVentaDevices(ventaForm)
+  const ventaStatusSummary = getVentaStatusSummary(ventaForm)
   const isAdmin = currentUser?.rol === 'ADMIN'
+  const selectedWhatsAppChat = useMemo(
+    () => whatsAppChats.find((chat) => chat.telefono === selectedWhatsAppChatPhone) || null,
+    [whatsAppChats, selectedWhatsAppChatPhone]
+  )
+  const defaultWhatsAppWebhookUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')}/webhooks/whatsapp`
+  const whatsAppWebhookUrl =
+    whatsAppConfig.webhookUrl.trim() || defaultWhatsAppWebhookUrl
   const visibleNavItems = useMemo(
     () =>
       [
@@ -2140,6 +2377,7 @@ function App() {
         { key: 'ventas', label: 'Ventas', icon: 'ventas' },
         { key: 'clientes', label: 'Clientes', icon: 'clientes' },
         ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
+        { key: 'chats', label: 'Chats', icon: 'whatsapp' },
         { key: 'historial', label: 'Historial', icon: 'historial' },
         { key: 'configuracion', label: 'Configuración', icon: 'configuracion' },
       ] as Array<{ key: TabKey; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }>,
@@ -2828,7 +3066,7 @@ function App() {
                       <div style={{ marginBottom: '14px' }}>
                         <h2 style={{ marginTop: 0, color: '#f8fafc' }}>Registrar / Editar venta</h2>
                         <p style={{ marginTop: '6px', color: '#94a3b8', fontSize: '14px' }}>
-                          Registra el mes activo del cliente. La venta se guarda pagada y luego pasa a pendiente automáticamente cuando vence.
+                          Registra el mes activo del cliente y elige si el pago ya fue recibido o si debe quedar pendiente.
                         </p>
                       </div>
 
@@ -2964,39 +3202,68 @@ function App() {
                               />
                             </div>
 
-                             <div>
-                               <label style={formLabelStyle}>Fecha de pago</label>
-                               <input
-                                 type="date"
-                                 name="fechaPago"
-                                value={ventaForm.fechaPago}
-                                 onChange={handleVentaChange}
-                                 style={inputStyle}
-                               />
-                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                 Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.
-                               </div>
-                             </div>
+                            <div>
+                              <label style={formLabelStyle}>Pago recibido</label>
+                              <select
+                                name="pagoRegistrado"
+                                value={ventaForm.pagoRegistrado}
+                                onChange={handleVentaChange}
+                                disabled={ventaForm.estado === 'BAJA'}
+                                style={{
+                                  ...inputStyle,
+                                  opacity: ventaForm.estado === 'BAJA' ? 0.6 : 1,
+                                  cursor: ventaForm.estado === 'BAJA' ? 'not-allowed' : 'pointer',
+                                }}
+                              >
+                                <option value="SI">Si</option>
+                                <option value="NO">No</option>
+                              </select>
+                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                Si eliges No, la venta se guardará pendiente hasta registrar el pago.
+                              </div>
+                            </div>
 
-                             <div>
-                               <label style={formLabelStyle}>Estado automático</label>
-                               <div
-                                 style={{
-                                   ...inputStyle,
-                                   background: '#0b1730',
-                                   display: 'flex',
-                                   alignItems: 'center',
-                                   minHeight: '48px',
-                                 }}
-                               >
-                                 {ventaForm.estado === 'BAJA' ? 'BAJA' : 'PAGADO hasta la fecha de cierre'}
-                               </div>
-                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
-                                 {ventaForm.estado === 'BAJA'
-                                   ? 'Esta venta está marcada como baja.'
-                                   : 'Cuando pase la fecha de cierre, el sistema la mostrará como pendiente de forma automática.'}
-                               </div>
-                             </div>
+                            <div>
+                              <label style={formLabelStyle}>Fecha de pago</label>
+                              <input
+                                type="date"
+                                name="fechaPago"
+                                value={ventaForm.fechaPago}
+                                onChange={handleVentaChange}
+                                disabled={ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'}
+                                style={{
+                                  ...inputStyle,
+                                  opacity: ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA' ? 0.6 : 1,
+                                  cursor:
+                                    ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'
+                                      ? 'not-allowed'
+                                      : 'text',
+                                }}
+                              />
+                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                {ventaForm.pagoRegistrado === 'NO'
+                                  ? 'Se dejará vacía porque la venta quedará pendiente.'
+                                  : 'Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.'}
+                              </div>
+                            </div>
+
+                            <div>
+                              <label style={formLabelStyle}>Estado automático</label>
+                              <div
+                                style={{
+                                  ...inputStyle,
+                                  background: '#0b1730',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  minHeight: '48px',
+                                }}
+                              >
+                                {ventaStatusSummary.label}
+                              </div>
+                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                {ventaStatusSummary.description}
+                              </div>
+                            </div>
 
                             <div style={{ gridColumn: '1 / -1' }}>
                               <label style={formLabelStyle}>Tipo de dispositivo</label>
@@ -3801,6 +4068,280 @@ function App() {
               />
             )}
 
+            {activeTab === 'chats' && (
+              <div style={{ display: 'grid', gap: '20px' }}>
+                <div style={cardStyle}>
+                  <div style={headerRowStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <div
+                        style={{
+                          width: '42px',
+                          height: '42px',
+                          display: 'grid',
+                          placeItems: 'center',
+                          borderRadius: '14px',
+                          background: 'rgba(34,197,94,0.14)',
+                          color: '#86efac',
+                        }}
+                      >
+                        <AppIcon name="whatsapp" />
+                      </div>
+                      <div>
+                        <h2 style={{ margin: 0, color: '#f8fafc' }}>Chats de WhatsApp</h2>
+                        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
+                          Revisa respuestas entrantes y contesta desde el sistema.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button type="button" onClick={() => void cargarWhatsAppChats()} style={buttonSecondary}>
+                      Actualizar chats
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : '340px minmax(0, 1fr)',
+                      gap: '16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        border: '1px solid #1e293b',
+                        borderRadius: '18px',
+                        background: 'rgba(2,6,23,0.22)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid #1e293b',
+                          color: '#f8fafc',
+                          fontWeight: 700,
+                        }}
+                      >
+                        Conversaciones
+                      </div>
+
+                      {loadingWhatsAppChats ? (
+                        <div style={{ padding: '16px', color: '#94a3b8' }}>Cargando conversaciones...</div>
+                      ) : whatsAppChats.length === 0 ? (
+                        <div style={{ padding: '16px', color: '#94a3b8', lineHeight: 1.6 }}>
+                          Aún no hay respuestas entrantes.
+                          <br />
+                          Cuando configures el webhook en Meta, aquí aparecerán los mensajes de tus clientes.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid' }}>
+                          {whatsAppChats.map((chat) => {
+                            const active = chat.telefono === selectedWhatsAppChatPhone
+
+                            return (
+                              <button
+                                key={chat.telefono}
+                                type="button"
+                                onClick={() => setSelectedWhatsAppChatPhone(chat.telefono)}
+                                style={{
+                                  padding: '14px 16px',
+                                  textAlign: 'left',
+                                  border: 'none',
+                                  borderBottom: '1px solid #1e293b',
+                                  background: active ? 'rgba(37,99,235,0.16)' : 'transparent',
+                                  color: '#e2e8f0',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                                  <div style={{ color: '#f8fafc', fontWeight: 700 }}>
+                                    {chat.clienteNombre || 'Cliente'}
+                                  </div>
+                                  <div style={{ color: '#94a3b8', fontSize: '12px' }}>
+                                    {formatChatTimestamp(chat.lastAt)}
+                                  </div>
+                                </div>
+                                <div style={{ color: '#60a5fa', fontSize: '12px', marginTop: '4px' }}>
+                                  {chat.telefono}
+                                </div>
+                                <div
+                                  style={{
+                                    marginTop: '8px',
+                                    color: '#cbd5e1',
+                                    fontSize: '13px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {chat.lastDirection === 'IN' ? 'Cliente: ' : 'Tú: '}
+                                  {chat.lastMessage}
+                                </div>
+                                {chat.unreadCount > 0 && (
+                                  <div style={{ marginTop: '10px' }}>
+                                    <span
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '26px',
+                                        padding: '4px 8px',
+                                        borderRadius: '999px',
+                                        background: 'rgba(34,197,94,0.18)',
+                                        color: '#86efac',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      {chat.unreadCount} nuevo{chat.unreadCount === 1 ? '' : 's'}
+                                    </span>
+                                  </div>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        border: '1px solid #1e293b',
+                        borderRadius: '18px',
+                        background: 'rgba(2,6,23,0.22)',
+                        overflow: 'hidden',
+                        minHeight: '540px',
+                        display: 'grid',
+                        gridTemplateRows: 'auto minmax(0, 1fr) auto',
+                      }}
+                    >
+                      <div
+                        style={{
+                          padding: '14px 16px',
+                          borderBottom: '1px solid #1e293b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <div>
+                          <div style={{ color: '#f8fafc', fontWeight: 700 }}>
+                            {selectedWhatsAppChat?.clienteNombre || 'Sin conversación seleccionada'}
+                          </div>
+                          <div style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
+                            {selectedWhatsAppChat?.telefono || 'Selecciona un chat para ver los mensajes'}
+                          </div>
+                        </div>
+
+                        {selectedWhatsAppChatPhone && (
+                          <button
+                            type="button"
+                            onClick={() => void cargarWhatsAppChatMessages(selectedWhatsAppChatPhone)}
+                            style={buttonSecondary}
+                          >
+                            Actualizar mensajes
+                          </button>
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          padding: '16px',
+                          overflowY: 'auto',
+                          display: 'grid',
+                          gap: '12px',
+                          alignContent: 'start',
+                        }}
+                      >
+                        {!selectedWhatsAppChatPhone ? (
+                          <div style={{ color: '#94a3b8' }}>
+                            Selecciona una conversación para revisar los mensajes y responder.
+                          </div>
+                        ) : loadingWhatsAppChatMessages ? (
+                          <div style={{ color: '#94a3b8' }}>Cargando mensajes...</div>
+                        ) : whatsAppChatMessages.length === 0 ? (
+                          <div style={{ color: '#94a3b8' }}>Aún no hay mensajes en esta conversación.</div>
+                        ) : (
+                          whatsAppChatMessages.map((message) => {
+                            const incoming = message.direction === 'IN'
+
+                            return (
+                              <div
+                                key={message.id}
+                                style={{
+                                  justifySelf: incoming ? 'start' : 'end',
+                                  maxWidth: isPhone ? '92%' : '78%',
+                                  padding: '12px 14px',
+                                  borderRadius: incoming ? '18px 18px 18px 6px' : '18px 18px 6px 18px',
+                                  background: incoming ? 'rgba(15,23,42,0.92)' : 'rgba(37,99,235,0.18)',
+                                  border: incoming
+                                    ? '1px solid rgba(148,163,184,0.14)'
+                                    : '1px solid rgba(59,130,246,0.25)',
+                                }}
+                              >
+                                <div style={{ color: '#f8fafc', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                                  {message.text || '(sin contenido)'}
+                                </div>
+                                <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                  {incoming ? 'Cliente' : 'Tú'} · {formatChatTimestamp(message.createdAt)}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          padding: '14px 16px',
+                          borderTop: '1px solid #1e293b',
+                          display: 'grid',
+                          gap: '10px',
+                        }}
+                      >
+                        <textarea
+                          value={whatsAppReplyText}
+                          onChange={(e) => setWhatsAppReplyText(e.target.value)}
+                          placeholder={
+                            selectedWhatsAppChatPhone
+                              ? 'Escribe tu respuesta al cliente...'
+                              : 'Selecciona primero una conversación'
+                          }
+                          disabled={!selectedWhatsAppChatPhone || sendingWhatsAppReply}
+                          rows={4}
+                          style={{
+                            ...inputStyle,
+                            resize: 'vertical',
+                            opacity: !selectedWhatsAppChatPhone || sendingWhatsAppReply ? 0.75 : 1,
+                          }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                          <div style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
+                            La respuesta manual usa el canal de atención de WhatsApp. Si Meta rechaza el envío,
+                            normalmente es porque ya venció la ventana de 24 horas.
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void responderWhatsAppChat()}
+                            disabled={!selectedWhatsAppChatPhone || sendingWhatsAppReply}
+                            style={{
+                              ...buttonPrimary,
+                              opacity: !selectedWhatsAppChatPhone || sendingWhatsAppReply ? 0.6 : 1,
+                              cursor: !selectedWhatsAppChatPhone || sendingWhatsAppReply ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {sendingWhatsAppReply ? 'Enviando...' : 'Responder chat'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'configuracion' && (
               <div style={{ display: 'grid', gap: '20px' }}>
                 <div style={cardStyle}>
@@ -4112,8 +4653,8 @@ function App() {
                       accent={whatsAppConfig.hasToken ? '#4ade80' : '#f87171'}
                     />
                     <DashboardMiniStat
-                      label="Plantilla"
-                      value={whatsAppConfig.templateName || 'Sin definir'}
+                      label="Plantilla hoy"
+                      value={whatsAppConfig.dueTodayTemplateName || 'Sin definir'}
                       accent="#fbbf24"
                     />
                     <DashboardMiniStat
@@ -4139,7 +4680,7 @@ function App() {
                       <div style={{ color: '#cbd5e1', lineHeight: 1.7 }}>
                         Destino: {lastWhatsAppTest.to || 'Sin destino'}
                         <br />
-                        Modo: {lastWhatsAppTest.mode}
+                        Modo: {getWhatsAppModeLabel(lastWhatsAppTest.mode as WhatsAppTestFormState['mode'])}
                         <br />
                         Plantilla: {lastWhatsAppTest.templateName || 'Sin plantilla'}
                         <br />
@@ -4167,19 +4708,123 @@ function App() {
                         style={inputStyle}
                       />
                       <input
-                        value={whatsAppConfig.templateName}
+                        value={whatsAppConfig.webhookUrl}
                         onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, templateName: e.target.value }))
+                          setWhatsAppConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))
                         }
-                        placeholder="Template name"
+                        placeholder={`Webhook URL publico (si lo dejas vacio: ${defaultWhatsAppWebhookUrl})`}
                         style={inputStyle}
                       />
                       <input
-                        value={whatsAppConfig.langCode}
+                        value={whatsAppConfig.webhookVerifyToken}
                         onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, langCode: e.target.value }))
+                          setWhatsAppConfig((prev) => ({ ...prev, webhookVerifyToken: e.target.value }))
                         }
-                        placeholder="Language code"
+                        placeholder="Webhook verify token"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.notifyPhone}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, notifyPhone: e.target.value }))
+                        }
+                        placeholder="Numero para alertas de respuesta (+51989267132)"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.dueTomorrowTemplateName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowTemplateName: e.target.value }))
+                        }
+                        placeholder="Plantilla vence manana"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.dueTomorrowLangCode}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowLangCode: e.target.value }))
+                        }
+                        placeholder="Idioma vence manana"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.dueTodayTemplateName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({
+                            ...prev,
+                            templateName: e.target.value,
+                            dueTodayTemplateName: e.target.value,
+                          }))
+                        }
+                        placeholder="Plantilla vence hoy"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.dueTodayLangCode}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({
+                            ...prev,
+                            langCode: e.target.value,
+                            dueTodayLangCode: e.target.value,
+                          }))
+                        }
+                        placeholder="Idioma vence hoy"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.overdueTemplateName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, overdueTemplateName: e.target.value }))
+                        }
+                        placeholder="Plantilla vencido"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.overdueLangCode}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, overdueLangCode: e.target.value }))
+                        }
+                        placeholder="Idioma vencido"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.accessUpdateTemplateName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, accessUpdateTemplateName: e.target.value }))
+                        }
+                        placeholder="Plantilla cambio de acceso"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.accessUpdateLangCode}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, accessUpdateLangCode: e.target.value }))
+                        }
+                        placeholder="Idioma cambio de acceso"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.paymentMethods}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, paymentMethods: e.target.value }))
+                        }
+                        placeholder="Metodos de pago"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.paymentPhone}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, paymentPhone: e.target.value }))
+                        }
+                        placeholder="Numero de cobro"
+                        style={inputStyle}
+                      />
+                      <input
+                        value={whatsAppConfig.paymentContactName}
+                        onChange={(e) =>
+                          setWhatsAppConfig((prev) => ({ ...prev, paymentContactName: e.target.value }))
+                        }
+                        placeholder="Nombre de cobro"
                         style={inputStyle}
                       />
                       <input
@@ -4188,6 +4833,24 @@ function App() {
                         placeholder={whatsAppConfig.hasToken ? 'Nuevo token (opcional)' : 'Access token'}
                         style={inputStyle}
                       />
+                      <div
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: '14px',
+                          border: '1px solid rgba(148,163,184,0.12)',
+                          background: 'rgba(2,6,23,0.28)',
+                          color: '#94a3b8',
+                          fontSize: '12px',
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        URL efectivo del webhook: <b style={{ color: '#f8fafc' }}>{whatsAppWebhookUrl}</b>
+                        <br />
+                        Si tu backend está desplegado, pega aquí su URL pública completa terminando en <b style={{ color: '#f8fafc' }}>/webhooks/whatsapp</b>.
+                        <br />
+                        Luego configura en Meta ese callback URL y usa este verify token:{' '}
+                        <b style={{ color: '#f8fafc' }}>{whatsAppConfig.webhookVerifyToken || 'sistema-cobro-whatsapp'}</b>
+                      </div>
 
                       <div
                         style={{
@@ -4217,12 +4880,15 @@ function App() {
                           onChange={(e) =>
                             setWhatsAppTestForm((prev) => ({
                               ...prev,
-                              mode: e.target.value as 'configured' | 'hello_world',
+                              mode: e.target.value as WhatsAppTestFormState['mode'],
                             }))
                           }
                           style={inputStyle}
                         >
-                          <option value="configured">Plantilla configurada</option>
+                          <option value="due_tomorrow">Vence manana</option>
+                          <option value="due_today">Vence hoy</option>
+                          <option value="overdue">Vencido</option>
+                          <option value="access_update">Cambio de acceso</option>
                           <option value="hello_world">hello_world</option>
                         </select>
                         <input
@@ -4233,22 +4899,45 @@ function App() {
                           placeholder="Nombre de prueba"
                           style={inputStyle}
                         />
-                        <input
-                          type="date"
-                          value={whatsAppTestForm.fechaCierre}
-                          onChange={(e) =>
-                            setWhatsAppTestForm((prev) => ({ ...prev, fechaCierre: e.target.value }))
-                          }
-                          style={inputStyle}
-                        />
-                        <input
-                          value={whatsAppTestForm.monto}
-                          onChange={(e) =>
-                            setWhatsAppTestForm((prev) => ({ ...prev, monto: e.target.value }))
-                          }
-                          placeholder="Monto de prueba"
-                          style={inputStyle}
-                        />
+                        {whatsAppTestForm.mode === 'access_update' ? (
+                          <>
+                            <input
+                              value={whatsAppTestForm.correoCuenta}
+                              onChange={(e) =>
+                                setWhatsAppTestForm((prev) => ({ ...prev, correoCuenta: e.target.value }))
+                              }
+                              placeholder="Correo de acceso"
+                              style={inputStyle}
+                            />
+                            <input
+                              value={whatsAppTestForm.passwordCuenta}
+                              onChange={(e) =>
+                                setWhatsAppTestForm((prev) => ({ ...prev, passwordCuenta: e.target.value }))
+                              }
+                              placeholder="Contrasena de acceso"
+                              style={inputStyle}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="date"
+                              value={whatsAppTestForm.fechaCierre}
+                              onChange={(e) =>
+                                setWhatsAppTestForm((prev) => ({ ...prev, fechaCierre: e.target.value }))
+                              }
+                              style={inputStyle}
+                            />
+                            <input
+                              value={whatsAppTestForm.monto}
+                              onChange={(e) =>
+                                setWhatsAppTestForm((prev) => ({ ...prev, monto: e.target.value }))
+                              }
+                              placeholder="Monto de prueba"
+                              style={inputStyle}
+                            />
+                          </>
+                        )}
                         <button type="button" onClick={() => void runWhatsAppTest()} style={buttonSecondary}>
                           Enviar prueba
                         </button>
@@ -4259,7 +4948,7 @@ function App() {
                           Guardar configuración
                         </button>
                         <button type="button" onClick={runWhatsAppDueTodayNow} style={buttonInfo}>
-                          Enviar cobros de hoy ahora
+                          Enviar recordatorios ahora
                         </button>
                       </div>
                     </div>

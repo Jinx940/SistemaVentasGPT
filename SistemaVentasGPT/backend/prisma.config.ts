@@ -3,7 +3,12 @@
 import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 
-const shadowDatabaseUrl = process.env.SHADOW_DATABASE_URL;
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+};
+
+const processEnv = (globalThis as typeof globalThis & { process?: ProcessLike }).process?.env;
+const shadowDatabaseUrl = processEnv?.SHADOW_DATABASE_URL;
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

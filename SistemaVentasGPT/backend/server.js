@@ -55,8 +55,16 @@ const COSTO_POR_CORREO = COSTO_CHATGPT_POR_CUENTA;
 const SESSION_DURATION_DAYS = 7;
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const WHATSAPP_AUTO_SEND_INTERVAL_MINUTES = Math.max(
+  5,
+  Number(process.env.WA_AUTO_SEND_INTERVAL_MINUTES) || 15
+);
+const WHATSAPP_AUTO_SEND_ENABLED =
+  String(process.env.WA_AUTO_SEND_ENABLED || 'true').toLowerCase() === 'true';
+const AUTO_VENTA_PAYMENT_NOTE = 'Pago registrado al guardar la venta';
 
 const loginAttemptStore = new Map();
+let whatsAppAutoReminderPromise = null;
 
 const MONTH_SHEETS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -310,10 +318,12 @@ function getVentaEstadoActual(venta, baseDate = new Date()) {
   const estado = cleanText(venta?.estado);
 
   if (estado === 'BAJA') return 'BAJA';
-  if (estado === 'MENSAJE_ENVIADO') return 'MENSAJE_ENVIADO';
+  if (estado === 'PENDIENTE') return 'PENDIENTE';
 
   const cierre = getVentaDateOnly(venta?.fechaCierre);
-  if (!cierre) return estado || 'PENDIENTE';
+  if (!cierre) {
+    return estado === 'PAGADO' ? 'PAGADO' : 'PENDIENTE';
+  }
 
   const today = getStartOfToday(baseDate);
   return cierre.getTime() < today.getTime() ? 'PENDIENTE' : 'PAGADO';
@@ -329,14 +339,35 @@ function isVentaDueToday(venta, baseDate = new Date()) {
   return !!cierre && cierre.getTime() === today.getTime();
 }
 
+function isVentaDueTomorrow(venta, baseDate = new Date()) {
+  const estado = getVentaEstadoActual(venta, baseDate);
+  if (estado === 'BAJA') return false;
+
+  const cierre = getVentaDateOnly(venta?.fechaCierre);
+  const tomorrow = getStartOfToday(baseDate);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return !!cierre && cierre.getTime() === tomorrow.getTime();
+}
+
 function isVentaOverdue(venta, baseDate = new Date()) {
   const estado = getVentaEstadoActual(venta, baseDate);
-  if (estado !== 'PENDIENTE' && estado !== 'MENSAJE_ENVIADO') return false;
+  if (estado === 'BAJA') return false;
 
   const cierre = getVentaDateOnly(venta?.fechaCierre);
   const today = getStartOfToday(baseDate);
 
   return !!cierre && cierre.getTime() < today.getTime();
+}
+
+function getVentaDaysOverdue(venta, baseDate = new Date()) {
+  const cierre = getVentaDateOnly(venta?.fechaCierre);
+  if (!cierre) return 0;
+
+  const today = getStartOfToday(baseDate);
+  const diff = today.getTime() - cierre.getTime();
+
+  return diff > 0 ? Math.floor(diff / 86400000) : 0;
 }
 
 function getVentaMesReferencia(value) {
@@ -639,7 +670,7 @@ function buildVentaData(body, options = {}) {
 
   if (currentEstado === 'BAJA' && !cleanText(body.estado)) {
     estado = 'BAJA';
-  } else if (estado !== 'BAJA' && estado !== 'MENSAJE_ENVIADO') {
+  } else if (!ESTADOS.includes(estado)) {
     estado = defaultEstado;
   }
 
@@ -649,6 +680,10 @@ function buildVentaData(body, options = {}) {
 
   if (estado === 'PAGADO' && !fechaPago) {
     fechaPago = new Date(fechaInicio);
+  }
+
+  if (estado === 'PENDIENTE') {
+    fechaPago = null;
   }
 
   return {
@@ -766,13 +801,83 @@ async function setConfigValue(clave, valor) {
 async function getWhatsAppSettings() {
   const cfg = await getConfigMap();
 
+  const dueTodayTemplateName =
+    cfg.WA_TEMPLATE_DUE_TODAY_NAME ||
+    cfg.WA_TEMPLATE_NAME ||
+    process.env.WA_TEMPLATE_DUE_TODAY_NAME ||
+    process.env.WA_TEMPLATE_NAME ||
+    'gpt_vence_hoy';
+  const dueTodayLangCode =
+    cfg.WA_TEMPLATE_DUE_TODAY_LANG ||
+    cfg.WA_LANG_CODE ||
+    process.env.WA_TEMPLATE_DUE_TODAY_LANG ||
+    process.env.WA_LANG_CODE ||
+    'es_PE';
+  const dueTomorrowTemplateName =
+    cfg.WA_TEMPLATE_DUE_TOMORROW_NAME ||
+    process.env.WA_TEMPLATE_DUE_TOMORROW_NAME ||
+    '';
+  const dueTomorrowLangCode =
+    cfg.WA_TEMPLATE_DUE_TOMORROW_LANG ||
+    process.env.WA_TEMPLATE_DUE_TOMORROW_LANG ||
+    dueTodayLangCode;
+  const accessUpdateTemplateName =
+    cfg.WA_TEMPLATE_ACCESS_UPDATE_NAME ||
+    process.env.WA_TEMPLATE_ACCESS_UPDATE_NAME ||
+    '';
+  const accessUpdateLangCode =
+    cfg.WA_TEMPLATE_ACCESS_UPDATE_LANG ||
+    process.env.WA_TEMPLATE_ACCESS_UPDATE_LANG ||
+    dueTodayLangCode;
+  const overdueTemplateName =
+    cfg.WA_TEMPLATE_OVERDUE_NAME ||
+    process.env.WA_TEMPLATE_OVERDUE_NAME ||
+    '';
+  const overdueLangCode =
+    cfg.WA_TEMPLATE_OVERDUE_LANG ||
+    process.env.WA_TEMPLATE_OVERDUE_LANG ||
+    dueTodayLangCode;
+  const webhookVerifyToken =
+    cfg.WA_WEBHOOK_VERIFY_TOKEN ||
+    process.env.WA_WEBHOOK_VERIFY_TOKEN ||
+    'sistema-cobro-whatsapp';
+  const webhookUrl =
+    cfg.WA_WEBHOOK_URL ||
+    process.env.WA_WEBHOOK_URL ||
+    '';
+  const notifyPhone =
+    cfg.WA_NOTIFY_PHONE ||
+    process.env.WA_NOTIFY_PHONE ||
+    '';
+
   return {
     enabled: String(cfg.WA_ENABLED || process.env.WA_ENABLED || 'false').toLowerCase() === 'true',
     graphVersion: cfg.WA_GRAPH_VERSION || process.env.WA_GRAPH_VERSION || 'v23.0',
     phoneNumberId: cfg.WA_PHONE_NUMBER_ID || process.env.WA_PHONE_NUMBER_ID || '',
     accessToken: cfg.WA_ACCESS_TOKEN || process.env.WA_ACCESS_TOKEN || '',
-    templateName: cfg.WA_TEMPLATE_NAME || process.env.WA_TEMPLATE_NAME || 'gpt_plus_vence_hoy',
-    langCode: cfg.WA_LANG_CODE || process.env.WA_LANG_CODE || 'es_PE',
+    templateName: dueTodayTemplateName,
+    langCode: dueTodayLangCode,
+    dueTodayTemplateName,
+    dueTodayLangCode,
+    dueTomorrowTemplateName,
+    dueTomorrowLangCode,
+    overdueTemplateName,
+    overdueLangCode,
+    accessUpdateTemplateName,
+    accessUpdateLangCode,
+    serviceResumeDate:
+      cfg.WA_SERVICE_RESUME_DATE || process.env.WA_SERVICE_RESUME_DATE || '01/03',
+    paymentMethods:
+      cfg.WA_PAYMENT_METHODS || process.env.WA_PAYMENT_METHODS || 'Yape / Plin',
+    paymentPhone:
+      cfg.WA_PAYMENT_PHONE || process.env.WA_PAYMENT_PHONE || '950275766',
+    paymentContactName:
+      cfg.WA_PAYMENT_CONTACT_NAME ||
+      process.env.WA_PAYMENT_CONTACT_NAME ||
+      'Jesus Dominguez',
+    webhookUrl,
+    webhookVerifyToken,
+    notifyPhone,
   };
 }
 
@@ -1043,7 +1148,23 @@ async function ensurePagoRegistroParaVenta({ venta, usuarioId, observacion = nul
       monto,
       fechaPago: venta.fechaPago,
       mesesPagados: 1,
-      observacion: observacion || 'Pago registrado al guardar la venta',
+      observacion: observacion || AUTO_VENTA_PAYMENT_NOTE,
+    },
+  });
+}
+
+async function syncPagoRegistroParaVenta({ venta, usuarioId, observacion = null }) {
+  if (!venta) return;
+
+  if (cleanText(venta.estado) === 'PAGADO' && venta.fechaPago) {
+    await ensurePagoRegistroParaVenta({ venta, usuarioId, observacion });
+    return;
+  }
+
+  await prisma.pago.deleteMany({
+    where: {
+      ventaId: venta.id,
+      observacion: AUTO_VENTA_PAYMENT_NOTE,
     },
   });
 }
@@ -1077,6 +1198,93 @@ function validateWhatsAppSettings(cfg) {
 async function isWhatsAppEnabled() {
   const cfg = await getWhatsAppSettings();
   return cfg.enabled;
+}
+
+function validateWhatsAppBaseSettings(cfg) {
+  if (!cfg) return 'No se pudo leer la configuracion de WhatsApp.';
+
+  if (!cleanText(cfg.phoneNumberId)) {
+    return 'Falta configurar WA_PHONE_NUMBER_ID.';
+  }
+
+  if (!cleanText(cfg.accessToken)) {
+    return 'Falta configurar WA_ACCESS_TOKEN.';
+  }
+
+  if (!cleanText(cfg.graphVersion)) {
+    return 'Falta configurar WA_GRAPH_VERSION.';
+  }
+
+  return null;
+}
+
+function getWhatsAppTemplateConfig(cfg, mode = 'due_today') {
+  if (mode === 'due_tomorrow') {
+    return {
+      templateName: cleanText(cfg?.dueTomorrowTemplateName),
+      langCode: cleanText(cfg?.dueTomorrowLangCode),
+      templateLabel: 'WA_TEMPLATE_DUE_TOMORROW_NAME',
+      langLabel: 'WA_TEMPLATE_DUE_TOMORROW_LANG',
+    };
+  }
+
+  if (mode === 'overdue') {
+    return {
+      templateName: cleanText(cfg?.overdueTemplateName),
+      langCode: cleanText(cfg?.overdueLangCode),
+      templateLabel: 'WA_TEMPLATE_OVERDUE_NAME',
+      langLabel: 'WA_TEMPLATE_OVERDUE_LANG',
+    };
+  }
+
+  if (mode === 'access_update') {
+    return {
+      templateName: cleanText(cfg?.accessUpdateTemplateName),
+      langCode: cleanText(cfg?.accessUpdateLangCode),
+      templateLabel: 'WA_TEMPLATE_ACCESS_UPDATE_NAME',
+      langLabel: 'WA_TEMPLATE_ACCESS_UPDATE_LANG',
+    };
+  }
+
+  return {
+    templateName: cleanText(cfg?.dueTodayTemplateName || cfg?.templateName),
+    langCode: cleanText(cfg?.dueTodayLangCode || cfg?.langCode),
+    templateLabel: 'WA_TEMPLATE_DUE_TODAY_NAME',
+    langLabel: 'WA_TEMPLATE_DUE_TODAY_LANG',
+  };
+}
+
+function validateWhatsAppTemplateSettings(cfg, mode = 'due_today') {
+  const baseError = validateWhatsAppBaseSettings(cfg);
+  if (baseError) return baseError;
+
+  const templateCfg = getWhatsAppTemplateConfig(cfg, mode);
+
+  if (!templateCfg.templateName) {
+    return `Falta configurar ${templateCfg.templateLabel}.`;
+  }
+
+  if (!templateCfg.langCode) {
+    return `Falta configurar ${templateCfg.langLabel}.`;
+  }
+
+  return null;
+}
+
+function validateWhatsAppReminderContentSettings(cfg) {
+  if (!cleanText(cfg?.paymentMethods)) {
+    return 'Falta configurar WA_PAYMENT_METHODS.';
+  }
+
+  if (!cleanText(cfg?.paymentPhone)) {
+    return 'Falta configurar WA_PAYMENT_PHONE.';
+  }
+
+  if (!cleanText(cfg?.paymentContactName)) {
+    return 'Falta configurar WA_PAYMENT_CONTACT_NAME.';
+  }
+
+  return null;
 }
 
 async function sendWhatsAppPayload(payload) {
@@ -1121,6 +1329,314 @@ async function sendWhatsAppHelloWorld({ toDigits }) {
   });
 }
 
+async function sendWhatsAppTextMessage({ toDigits, body }) {
+  const text = cleanText(body);
+  if (!text) throw new Error('El mensaje no puede estar vacío.');
+
+  return sendWhatsAppPayload({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: toDigits,
+    type: 'text',
+    text: {
+      preview_url: false,
+      body: text,
+    },
+  });
+}
+
+function parseWhatsAppWebhookTimestamp(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    const date = new Date(numeric * 1000);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const fallback = new Date(value);
+  return Number.isNaN(fallback.getTime()) ? new Date() : fallback;
+}
+
+function extractWhatsAppMessageText(message) {
+  const type = cleanText(message?.type).toLowerCase();
+
+  if (type === 'text') {
+    return cleanText(message?.text?.body);
+  }
+
+  if (type === 'button') {
+    return cleanText(message?.button?.text || message?.button?.payload);
+  }
+
+  if (type === 'interactive') {
+    const interactive = message?.interactive || {};
+    return cleanText(
+      interactive?.button_reply?.title ||
+        interactive?.button_reply?.id ||
+        interactive?.list_reply?.title ||
+        interactive?.list_reply?.description ||
+        interactive?.nfm_reply?.body
+    );
+  }
+
+  if (type === 'image') return '[Imagen]';
+  if (type === 'document') return '[Documento]';
+  if (type === 'audio') return '[Audio]';
+  if (type === 'video') return '[Video]';
+  if (type === 'sticker') return '[Sticker]';
+  if (type === 'location') return '[Ubicación]';
+
+  return `[${type || 'mensaje'}]`;
+}
+
+function normalizeDecisionText(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function detectCustomerDecision(text) {
+  const normalized = normalizeDecisionText(text);
+  if (!normalized) return null;
+
+  const positivePatterns = [
+    'si',
+    'si deseo continuar',
+    'quiero continuar',
+    'deseo continuar',
+    'continuar',
+    'si quiero',
+  ];
+  const negativePatterns = [
+    'no',
+    'no deseo continuar',
+    'no quiero continuar',
+    'ya no',
+    'no continuar',
+  ];
+
+  if (positivePatterns.includes(normalized)) {
+    return 'SI';
+  }
+
+  if (negativePatterns.includes(normalized)) {
+    return 'NO';
+  }
+
+  return null;
+}
+
+function buildOwnerDecisionAlertMessage({ clienteNombre, clienteTelefono, decision, rawText }) {
+  const actionText = decision === 'SI' ? 'SI desea continuar' : 'NO desea continuar';
+
+  return [
+    'Respuesta de cliente por WhatsApp',
+    `Cliente: ${clienteNombre || 'Cliente'}`,
+    `Telefono: ${clienteTelefono || '-'}`,
+    `Decision: ${actionText}`,
+    `Mensaje: ${cleanText(rawText) || '-'}`,
+  ].join('\n');
+}
+
+async function resolveChatClienteNombre(telefono, fallback = '') {
+  const cliente = await findClienteByTelefono(telefono).catch(() => null);
+  return cliente?.nombre || cleanText(fallback) || 'Cliente';
+}
+
+function buildWhatsAppChatRows(rows) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const phone = normalizePhoneDigits(row.telefono);
+    if (!phone) continue;
+
+    const current = grouped.get(phone) || [];
+    current.push(row);
+    grouped.set(phone, current);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([telefono, items]) => {
+      const sorted = [...items].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id
+      );
+      const last = sorted[sorted.length - 1];
+      const lastOutbound = [...sorted]
+        .reverse()
+        .find((item) => cleanText(item.estado) === 'CHAT_ENVIADO');
+      const lastOutboundTime = lastOutbound ? new Date(lastOutbound.createdAt).getTime() : 0;
+      const unreadCount = sorted.filter(
+        (item) =>
+          cleanText(item.estado) === 'CHAT_RECIBIDO' &&
+          new Date(item.createdAt).getTime() > lastOutboundTime
+      ).length;
+
+      return {
+        telefono,
+        clienteNombre: last?.clienteNombre || 'Cliente',
+        lastMessage: cleanText(last?.detalle) || '(sin contenido)',
+        lastDirection: cleanText(last?.estado) === 'CHAT_RECIBIDO' ? 'IN' : 'OUT',
+        lastStatus: cleanText(last?.estado) || 'CHAT_RECIBIDO',
+        lastAt: toIsoDateTime(last?.createdAt) || null,
+        unreadCount,
+      };
+    })
+    .sort((a, b) => new Date(b.lastAt || 0).getTime() - new Date(a.lastAt || 0).getTime());
+}
+
+function formatMontoForWhatsApp(value) {
+  const text = cleanText(value);
+  if (!text) return 'S/ 0.00';
+
+  const normalized = text.replace(/[^\d.,-]/g, '').replace(',', '.');
+  const amount = Number(normalized);
+
+  if (Number.isFinite(amount) && amount > 0) {
+    return `S/ ${amount.toFixed(2)}`;
+  }
+
+  return text;
+}
+
+function buildReminderMessageParameters({
+  cliente,
+  dueDate,
+  monto,
+  paymentMethods,
+  paymentPhone,
+  paymentContactName,
+}) {
+  return [
+    { type: 'text', text: String(cliente || '') },
+    { type: 'text', text: String(dueDate || '') },
+    { type: 'text', text: formatMontoForWhatsApp(monto) },
+    { type: 'text', text: String(paymentMethods || '') },
+    { type: 'text', text: String(paymentPhone || '') },
+    { type: 'text', text: String(paymentContactName || '') },
+  ];
+}
+
+function buildAccessUpdateParameters({ cliente, correo, password }) {
+  return [
+    { type: 'text', text: String(cliente || '') },
+    { type: 'text', text: String(correo || '') },
+    { type: 'text', text: String(password || '') },
+  ];
+}
+
+function buildOverdueMessageParameters({
+  cliente,
+  daysOverdue,
+  monto,
+  paymentMethods,
+  paymentPhone,
+  paymentContactName,
+}) {
+  return [
+    { type: 'text', text: String(cliente || '') },
+    { type: 'text', text: String(daysOverdue || 0) },
+    { type: 'text', text: formatMontoForWhatsApp(monto) },
+    { type: 'text', text: String(paymentMethods || '') },
+    { type: 'text', text: String(paymentPhone || '') },
+    { type: 'text', text: String(paymentContactName || '') },
+  ];
+}
+
+async function sendWhatsAppTemplateMessage({ toDigits, mode = 'due_today', parameters = [] }) {
+  const cfg = await getWhatsAppSettings();
+  const templateCfg = getWhatsAppTemplateConfig(cfg, mode);
+
+  if (!templateCfg.templateName) {
+    throw new Error(`Falta ${templateCfg.templateLabel}`);
+  }
+
+  if (!templateCfg.langCode) {
+    throw new Error(`Falta ${templateCfg.langLabel}`);
+  }
+
+  return sendWhatsAppPayload({
+    messaging_product: 'whatsapp',
+    to: toDigits,
+    type: 'template',
+    template: {
+      name: templateCfg.templateName,
+      language: { code: templateCfg.langCode },
+      components: [
+        {
+          type: 'body',
+          parameters,
+        },
+      ],
+    },
+  });
+}
+
+async function sendWhatsAppDueTomorrowTemplate({ toDigits, cliente, dueDate, monto }) {
+  const cfg = await getWhatsAppSettings();
+
+  return sendWhatsAppTemplateMessage({
+    toDigits,
+    mode: 'due_tomorrow',
+    parameters: buildReminderMessageParameters({
+      cliente,
+      dueDate,
+      monto,
+      paymentMethods: cfg.paymentMethods,
+      paymentPhone: cfg.paymentPhone,
+      paymentContactName: cfg.paymentContactName,
+    }),
+  });
+}
+
+async function sendWhatsAppDueTodayTemplate({ toDigits, cliente, dueDate, monto }) {
+  const cfg = await getWhatsAppSettings();
+
+  return sendWhatsAppTemplateMessage({
+    toDigits,
+    mode: 'due_today',
+    parameters: buildReminderMessageParameters({
+      cliente,
+      dueDate,
+      monto,
+      paymentMethods: cfg.paymentMethods,
+      paymentPhone: cfg.paymentPhone,
+      paymentContactName: cfg.paymentContactName,
+    }),
+  });
+}
+
+async function sendWhatsAppOverdueTemplate({ toDigits, cliente, monto, daysOverdue }) {
+  const cfg = await getWhatsAppSettings();
+
+  return sendWhatsAppTemplateMessage({
+    toDigits,
+    mode: 'overdue',
+    parameters: buildOverdueMessageParameters({
+      cliente,
+      daysOverdue,
+      monto,
+      paymentMethods: cfg.paymentMethods,
+      paymentPhone: cfg.paymentPhone,
+      paymentContactName: cfg.paymentContactName,
+    }),
+  });
+}
+
+async function sendWhatsAppAccessUpdateTemplate({ toDigits, cliente, correo, password }) {
+  return sendWhatsAppTemplateMessage({
+    toDigits,
+    mode: 'access_update',
+    parameters: buildAccessUpdateParameters({
+      cliente,
+      correo,
+      password,
+    }),
+  });
+}
+
 async function sendWhatsAppTemplate({ toDigits, cliente, fechaCierre, monto }) {
   const cfg = await getWhatsAppSettings();
 
@@ -1150,6 +1666,422 @@ async function sendWhatsAppTemplate({ toDigits, cliente, fechaCierre, monto }) {
   };
 
   return sendWhatsAppPayload(payload);
+}
+
+function buildWhatsAppLogKey({ ventaId, estado, fechaObjetivo }) {
+  return `${ventaId || 0}|${cleanText(estado)}|${toIsoDateTime(fechaObjetivo) || ''}`;
+}
+
+async function executeWhatsAppReminders({ usuarioId = null, trigger = 'MANUAL' } = {}) {
+  const waEnabled = await isWhatsAppEnabled();
+
+  if (!waEnabled) {
+    return {
+      ok: true,
+      sent: 0,
+      dueTomorrowSent: 0,
+      dueTodaySent: 0,
+      overdueSent: 0,
+      skipped: 0,
+      errors: 0,
+      message: 'WhatsApp esta desactivado.',
+    };
+  }
+
+  const waConfig = await getWhatsAppSettings();
+  const waConfigError =
+    validateWhatsAppBaseSettings(waConfig) ||
+    validateWhatsAppReminderContentSettings(waConfig);
+
+  if (waConfigError) {
+    throw new Error(waConfigError);
+  }
+
+  const ventas = await prisma.venta.findMany({
+    where: {
+      estado: {
+        not: 'BAJA',
+      },
+    },
+    include: {
+      cliente: true,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const candidateVentas = ventas.filter(
+    (venta) =>
+      isVentaDueTomorrow(venta, today) ||
+      isVentaDueToday(venta, today) ||
+      isVentaOverdue(venta, today)
+  );
+  const dueTomorrowReady = !validateWhatsAppTemplateSettings(waConfig, 'due_tomorrow');
+  const dueTodayReady = !validateWhatsAppTemplateSettings(waConfig, 'due_today');
+  const overdueReady = !validateWhatsAppTemplateSettings(waConfig, 'overdue');
+  const skippedByConfig = new Set();
+
+  const existingLogs = candidateVentas.length
+    ? await prisma.whatsAppLog.findMany({
+        where: {
+          ventaId: {
+            in: candidateVentas.map((venta) => venta.id),
+          },
+          estado: {
+            in: [
+              'RECORDATORIO_MANANA_ENVIADO',
+              'RECORDATORIO_HOY_ENVIADO',
+              'RECORDATORIO_VENCIDO_ENVIADO',
+            ],
+          },
+        },
+        select: {
+          ventaId: true,
+          estado: true,
+          fechaObjetivo: true,
+        },
+      })
+    : [];
+  const existingLogKeys = new Set(existingLogs.map((item) => buildWhatsAppLogKey(item)));
+
+  let sent = 0;
+  let dueTomorrowSent = 0;
+  let dueTodaySent = 0;
+  let overdueSent = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const venta of ventas) {
+    let reminderState = '';
+    let reminderLabel = '';
+    let reminderMode = '';
+    let reminderDate = venta.fechaCierre;
+
+    if (isVentaDueTomorrow(venta, today)) {
+      reminderState = 'RECORDATORIO_MANANA_ENVIADO';
+      reminderLabel = 'Recordatorio de vence manana';
+      reminderMode = 'due_tomorrow';
+    } else if (isVentaDueToday(venta, today)) {
+      reminderState = 'RECORDATORIO_HOY_ENVIADO';
+      reminderLabel = 'Recordatorio de vence hoy';
+      reminderMode = 'due_today';
+    } else if (isVentaOverdue(venta, today)) {
+      const daysOverdue = getVentaDaysOverdue(venta, today);
+      reminderState = 'RECORDATORIO_VENCIDO_ENVIADO';
+      reminderLabel = `Recordatorio de vencido (${daysOverdue} dia(s))`;
+      reminderMode = 'overdue';
+      reminderDate = today;
+    } else {
+      skipped++;
+      continue;
+    }
+
+    if (
+      (reminderMode === 'due_tomorrow' && !dueTomorrowReady) ||
+      (reminderMode === 'due_today' && !dueTodayReady) ||
+      (reminderMode === 'overdue' && !overdueReady)
+    ) {
+      skipped++;
+      skippedByConfig.add(reminderMode);
+      continue;
+    }
+
+    const logKey = buildWhatsAppLogKey({
+      ventaId: venta.id,
+      estado: reminderState,
+      fechaObjetivo: reminderDate,
+    });
+
+    if (existingLogKeys.has(logKey)) {
+      skipped++;
+      continue;
+    }
+
+    const clienteNombre = cleanText(venta.cliente?.nombre);
+    const telefonoOriginal = cleanText(venta.cliente?.telefono);
+    const phoneDigits = normalizePhoneDigits(telefonoOriginal);
+    const montoTexto = Number(venta.monto || 0).toFixed(2);
+    const daysOverdue = getVentaDaysOverdue(venta, today);
+
+    if (!clienteNombre) {
+      errors++;
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: reminderDate,
+          estado: 'ERROR',
+          detalle: `${reminderLabel}: cliente sin nombre valido`,
+        },
+      });
+      continue;
+    }
+
+    if (!phoneDigits) {
+      errors++;
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: reminderDate,
+          estado: 'ERROR',
+          detalle: `${reminderLabel}: telefono invalido`,
+        },
+      });
+      continue;
+    }
+
+    try {
+      if (reminderState === 'RECORDATORIO_MANANA_ENVIADO') {
+        await sendWhatsAppDueTomorrowTemplate({
+          toDigits: phoneDigits,
+          cliente: clienteNombre,
+          dueDate: formatDateForMessage(venta.fechaCierre),
+          monto: montoTexto,
+        });
+      } else if (reminderState === 'RECORDATORIO_VENCIDO_ENVIADO') {
+        await sendWhatsAppOverdueTemplate({
+          toDigits: phoneDigits,
+          cliente: clienteNombre,
+          monto: montoTexto,
+          daysOverdue,
+        });
+      } else {
+        await sendWhatsAppDueTodayTemplate({
+          toDigits: phoneDigits,
+          cliente: clienteNombre,
+          dueDate: formatDateForMessage(venta.fechaCierre),
+          monto: montoTexto,
+        });
+      }
+
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: reminderDate,
+          estado: reminderState,
+          detalle: `${reminderLabel}: envio exitoso`,
+        },
+      });
+
+      existingLogKeys.add(logKey);
+      sent++;
+      if (reminderState === 'RECORDATORIO_MANANA_ENVIADO') {
+        dueTomorrowSent++;
+      } else if (reminderState === 'RECORDATORIO_VENCIDO_ENVIADO') {
+        overdueSent++;
+      } else {
+        dueTodaySent++;
+      }
+    } catch (error) {
+      errors++;
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: reminderDate,
+          estado: 'ERROR',
+          detalle: `${reminderLabel}: ${String(error.message || error)}`,
+        },
+      });
+    }
+  }
+
+  if (usuarioId || sent || errors) {
+    await registrarActividad({
+      usuarioId,
+      accion: 'WHATSAPP_RECORDATORIOS',
+      entidad: 'WHATSAPP',
+      descripcion: `Recordatorios ${trigger}. Manana: ${dueTomorrowSent}, hoy: ${dueTodaySent}, vencidos: ${overdueSent}, omitidos: ${skipped}, errores: ${errors}`,
+    });
+  }
+
+  const missingTemplatesMessage = Array.from(skippedByConfig)
+    .map((mode) =>
+      mode === 'due_tomorrow'
+        ? 'Plantilla vence manana no configurada'
+        : mode === 'due_today'
+          ? 'Plantilla vence hoy no configurada'
+          : 'Plantilla vencido no configurada'
+    )
+    .join('. ');
+
+  return {
+    ok: true,
+    sent,
+    dueTomorrowSent,
+    dueTodaySent,
+    overdueSent,
+    skipped,
+    errors,
+    message: missingTemplatesMessage || undefined,
+  };
+}
+
+async function runAutomaticWhatsAppReminders(trigger = 'AUTO') {
+  if (whatsAppAutoReminderPromise) {
+    return whatsAppAutoReminderPromise;
+  }
+
+  whatsAppAutoReminderPromise = executeWhatsAppReminders({
+    usuarioId: null,
+    trigger,
+  })
+    .catch((error) => {
+      console.error(`Error en recordatorios automáticos (${trigger}):`, error);
+      return null;
+    })
+    .finally(() => {
+      whatsAppAutoReminderPromise = null;
+    });
+
+  return whatsAppAutoReminderPromise;
+}
+
+function startWhatsAppReminderScheduler() {
+  if (!WHATSAPP_AUTO_SEND_ENABLED) {
+    console.log('Recordatorios automáticos de WhatsApp desactivados por configuración.');
+    return;
+  }
+
+  const intervalMs = WHATSAPP_AUTO_SEND_INTERVAL_MINUTES * 60 * 1000;
+
+  setTimeout(() => {
+    void runAutomaticWhatsAppReminders('AUTO_STARTUP');
+  }, 10 * 1000);
+
+  setInterval(() => {
+    void runAutomaticWhatsAppReminders('AUTO_INTERVAL');
+  }, intervalMs);
+
+  console.log(
+    `Recordatorios automáticos de WhatsApp activos cada ${WHATSAPP_AUTO_SEND_INTERVAL_MINUTES} minuto(s).`
+  );
+}
+
+async function sendAccessUpdateNotificationsForAccount({
+  cuentaAccesoId,
+  correo,
+  password,
+  usuarioId = null,
+}) {
+  if (!cuentaAccesoId || !cleanText(password)) {
+    return { sent: 0, skipped: 0, errors: 0 };
+  }
+
+  const waEnabled = await isWhatsAppEnabled();
+  if (!waEnabled) {
+    return { sent: 0, skipped: 0, errors: 0 };
+  }
+
+  const waConfig = await getWhatsAppSettings();
+  const waError = validateWhatsAppTemplateSettings(waConfig, 'access_update');
+
+  if (waError) {
+    return { sent: 0, skipped: 0, errors: 0 };
+  }
+
+  const ventas = await prisma.venta.findMany({
+    where: {
+      cuentaAccesoId,
+      estado: {
+        not: 'BAJA',
+      },
+    },
+    include: {
+      cliente: true,
+    },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+  });
+
+  const clientesProcesados = new Set();
+  let sent = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const venta of ventas) {
+    const clienteId = Number(venta.clienteId || 0);
+    if (clienteId && clientesProcesados.has(clienteId)) {
+      skipped++;
+      continue;
+    }
+
+    if (clienteId) {
+      clientesProcesados.add(clienteId);
+    }
+
+    const clienteNombre = cleanText(venta.cliente?.nombre);
+    const telefonoOriginal = cleanText(venta.cliente?.telefono);
+    const phoneDigits = normalizePhoneDigits(telefonoOriginal);
+
+    if (!clienteNombre || !phoneDigits) {
+      errors++;
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: new Date(),
+          estado: 'CAMBIO_ACCESO_ERROR',
+          detalle: !clienteNombre ? 'Cliente sin nombre valido' : 'Telefono invalido',
+        },
+      });
+      continue;
+    }
+
+    try {
+      await sendWhatsAppAccessUpdateTemplate({
+        toDigits: phoneDigits,
+        cliente: clienteNombre,
+        correo,
+        password,
+      });
+
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: new Date(),
+          estado: 'CAMBIO_ACCESO_ENVIADO',
+          detalle: `Cambio de acceso enviado para ${correo}`,
+        },
+      });
+
+      sent++;
+    } catch (error) {
+      errors++;
+      await prisma.whatsAppLog.create({
+        data: {
+          ventaId: venta.id,
+          clienteNombre: clienteNombre || null,
+          telefono: telefonoOriginal || null,
+          fechaObjetivo: new Date(),
+          estado: 'CAMBIO_ACCESO_ERROR',
+          detalle: String(error.message || error),
+        },
+      });
+    }
+  }
+
+  if (sent || errors) {
+    await registrarActividad({
+      usuarioId,
+      accion: 'WHATSAPP_CAMBIO_ACCESO',
+      entidad: 'CUENTA',
+      entidadId: cuentaAccesoId,
+      descripcion: `Avisos por cambio de acceso. Enviados: ${sent}, omitidos: ${skipped}, errores: ${errors}`,
+    });
+  }
+
+  return { sent, skipped, errors };
 }
 
 async function registrarHistorialBaja({
@@ -2204,8 +3136,23 @@ app.get('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
       enabled: cfg.enabled,
       graphVersion: cfg.graphVersion,
       phoneNumberId: cfg.phoneNumberId,
+      webhookUrl: cfg.webhookUrl,
+      webhookVerifyToken: cfg.webhookVerifyToken,
+      notifyPhone: cfg.notifyPhone,
       templateName: cfg.templateName,
       langCode: cfg.langCode,
+      dueTodayTemplateName: cfg.dueTodayTemplateName,
+      dueTodayLangCode: cfg.dueTodayLangCode,
+      dueTomorrowTemplateName: cfg.dueTomorrowTemplateName,
+      dueTomorrowLangCode: cfg.dueTomorrowLangCode,
+      overdueTemplateName: cfg.overdueTemplateName,
+      overdueLangCode: cfg.overdueLangCode,
+      accessUpdateTemplateName: cfg.accessUpdateTemplateName,
+      accessUpdateLangCode: cfg.accessUpdateLangCode,
+      serviceResumeDate: cfg.serviceResumeDate,
+      paymentMethods: cfg.paymentMethods,
+      paymentPhone: cfg.paymentPhone,
+      paymentContactName: cfg.paymentContactName,
       hasToken: !!cfg.accessToken,
     });
   } catch (error) {
@@ -2216,13 +3163,50 @@ app.get('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
 
 app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
   try {
+    const dueTodayTemplateName = cleanText(
+      req.body.dueTodayTemplateName || req.body.templateName || 'gpt_vence_hoy'
+    );
+    const dueTodayLangCode = cleanText(
+      req.body.dueTodayLangCode || req.body.langCode || 'es_PE'
+    );
+    const dueTomorrowTemplateName = cleanText(req.body.dueTomorrowTemplateName || '');
+    const dueTomorrowLangCode = cleanText(
+      req.body.dueTomorrowLangCode || dueTodayLangCode || 'es_PE'
+    );
+    const overdueTemplateName = cleanText(req.body.overdueTemplateName || '');
+    const overdueLangCode = cleanText(
+      req.body.overdueLangCode || dueTodayLangCode || 'es_PE'
+    );
+    const accessUpdateTemplateName = cleanText(req.body.accessUpdateTemplateName || '');
+    const accessUpdateLangCode = cleanText(
+      req.body.accessUpdateLangCode || dueTodayLangCode || 'es_PE'
+    );
+
     await setConfigValue('WA_GRAPH_VERSION', cleanText(req.body.graphVersion || 'v23.0'));
     await setConfigValue('WA_PHONE_NUMBER_ID', cleanText(req.body.phoneNumberId || ''));
+    await setConfigValue('WA_WEBHOOK_URL', cleanText(req.body.webhookUrl || ''));
     await setConfigValue(
-      'WA_TEMPLATE_NAME',
-      cleanText(req.body.templateName || 'gpt_plus_vence_hoy')
+      'WA_WEBHOOK_VERIFY_TOKEN',
+      cleanText(req.body.webhookVerifyToken || 'sistema-cobro-whatsapp')
     );
-    await setConfigValue('WA_LANG_CODE', cleanText(req.body.langCode || 'es_PE'));
+    await setConfigValue('WA_NOTIFY_PHONE', cleanText(req.body.notifyPhone || ''));
+    await setConfigValue('WA_TEMPLATE_NAME', dueTodayTemplateName);
+    await setConfigValue('WA_LANG_CODE', dueTodayLangCode);
+    await setConfigValue('WA_TEMPLATE_DUE_TODAY_NAME', dueTodayTemplateName);
+    await setConfigValue('WA_TEMPLATE_DUE_TODAY_LANG', dueTodayLangCode);
+    await setConfigValue('WA_TEMPLATE_DUE_TOMORROW_NAME', dueTomorrowTemplateName);
+    await setConfigValue('WA_TEMPLATE_DUE_TOMORROW_LANG', dueTomorrowLangCode);
+    await setConfigValue('WA_TEMPLATE_OVERDUE_NAME', overdueTemplateName);
+    await setConfigValue('WA_TEMPLATE_OVERDUE_LANG', overdueLangCode);
+    await setConfigValue('WA_TEMPLATE_ACCESS_UPDATE_NAME', accessUpdateTemplateName);
+    await setConfigValue('WA_TEMPLATE_ACCESS_UPDATE_LANG', accessUpdateLangCode);
+    await setConfigValue('WA_SERVICE_RESUME_DATE', cleanText(req.body.serviceResumeDate || '01/03'));
+    await setConfigValue('WA_PAYMENT_METHODS', cleanText(req.body.paymentMethods || 'Yape / Plin'));
+    await setConfigValue('WA_PAYMENT_PHONE', cleanText(req.body.paymentPhone || '950275766'));
+    await setConfigValue(
+      'WA_PAYMENT_CONTACT_NAME',
+      cleanText(req.body.paymentContactName || 'Jesus Dominguez')
+    );
 
     if (cleanText(req.body.accessToken)) {
       await setConfigValue('WA_ACCESS_TOKEN', cleanText(req.body.accessToken));
@@ -2530,6 +3514,13 @@ app.put('/cuentas/:id', requireRole('ADMIN'), async (req, res) => {
       descripcion: `Cuenta actualizada: ${cuentaActualizada.correo}`,
     });
 
+    await sendAccessUpdateNotificationsForAccount({
+      cuentaAccesoId: cuentaActualizada.id,
+      correo: cuentaActualizada.correo,
+      password,
+      usuarioId: req.authUser?.id,
+    });
+
     res.json({ ok: true });
     } catch (error) {
       console.error(error);
@@ -2653,7 +3644,7 @@ app.post('/ventas', requireAuth, async (req, res) => {
       include: SAFE_VENTA_INCLUDE,
     });
 
-    await ensurePagoRegistroParaVenta({
+    await syncPagoRegistroParaVenta({
       venta,
       usuarioId: req.authUser?.id,
     });
@@ -2720,7 +3711,7 @@ app.put('/ventas/:id', requireAuth, async (req, res) => {
       ventaDespues: venta,
     });
 
-    await ensurePagoRegistroParaVenta({
+    await syncPagoRegistroParaVenta({
       venta,
       usuarioId: req.authUser?.id,
     });
@@ -2919,6 +3910,389 @@ app.get('/actividad', requireAuth, async (req, res) => {
 app.post('/whatsapp/test', requireRole('ADMIN'), async (req, res) => {
   try {
     const toDigits = normalizePhoneDigits(req.body.to);
+    const modeRaw = cleanText(req.body.mode || 'due_today').toLowerCase();
+    const mode = modeRaw === 'configured' ? 'due_today' : modeRaw;
+    const cliente = cleanText(req.body.cliente || 'Cliente de prueba');
+    const fechaObjetivo = parseLocalDate(req.body.fechaCierre || req.body.fechaObjetivo) || new Date();
+    const monto = cleanText(req.body.monto || '0.00');
+    const correoCuenta = cleanText(req.body.correoCuenta || '');
+    const passwordCuenta = cleanText(req.body.passwordCuenta || '');
+    const waConfig = await getWhatsAppSettings();
+
+    if (!toDigits) {
+      return res.status(400).json({ error: 'Ingresa un numero de destino valido.' });
+    }
+
+    let result;
+    let templateName = 'hello_world';
+    let langCode = 'en_US';
+    let detalle = 'Prueba hello_world enviada correctamente';
+
+    if (mode === 'hello_world') {
+      result = await sendWhatsAppHelloWorld({ toDigits });
+    } else if (mode === 'access_update') {
+      const configError = validateWhatsAppTemplateSettings(waConfig, 'access_update');
+
+      if (configError) {
+        return res.status(400).json({ error: configError });
+      }
+
+      if (!correoCuenta || !passwordCuenta) {
+        return res.status(400).json({
+          error: 'Debes indicar el correo y la contrasena de acceso para esta prueba.',
+        });
+      }
+
+      result = await sendWhatsAppAccessUpdateTemplate({
+        toDigits,
+        cliente,
+        correo: correoCuenta,
+        password: passwordCuenta,
+      });
+
+      const templateCfg = getWhatsAppTemplateConfig(waConfig, 'access_update');
+      templateName = templateCfg.templateName;
+      langCode = templateCfg.langCode;
+      detalle = 'Prueba de cambio de acceso enviada correctamente';
+    } else {
+      const reminderMode =
+        mode === 'due_tomorrow' ? 'due_tomorrow' : mode === 'overdue' ? 'overdue' : 'due_today';
+      const configError =
+        validateWhatsAppTemplateSettings(waConfig, reminderMode) ||
+        validateWhatsAppReminderContentSettings(waConfig);
+
+      if (configError) {
+        return res.status(400).json({ error: configError });
+      }
+
+      result =
+        reminderMode === 'due_tomorrow'
+          ? await sendWhatsAppDueTomorrowTemplate({
+              toDigits,
+              cliente,
+              dueDate: formatDateForMessage(fechaObjetivo),
+              monto,
+            })
+          : reminderMode === 'overdue'
+            ? await sendWhatsAppOverdueTemplate({
+                toDigits,
+                cliente,
+                monto,
+                daysOverdue: getVentaDaysOverdue({ fechaCierre: fechaObjetivo }, new Date()),
+              })
+            : await sendWhatsAppDueTodayTemplate({
+                toDigits,
+                cliente,
+                dueDate: formatDateForMessage(fechaObjetivo),
+                monto,
+              });
+
+      const templateCfg = getWhatsAppTemplateConfig(waConfig, reminderMode);
+      templateName = templateCfg.templateName;
+      langCode = templateCfg.langCode;
+      detalle =
+        reminderMode === 'due_tomorrow'
+          ? 'Prueba del recordatorio de vence manana enviada correctamente'
+          : reminderMode === 'overdue'
+            ? 'Prueba del recordatorio de vencido enviada correctamente'
+            : 'Prueba del recordatorio de vence hoy enviada correctamente';
+    }
+
+    await prisma.whatsAppLog.create({
+      data: {
+        clienteNombre: cliente,
+        telefono: toDigits,
+        fechaObjetivo,
+        estado: 'PRUEBA',
+        detalle,
+      },
+    });
+
+    await registrarActividad({
+      usuarioId: req.authUser?.id,
+      accion: 'WHATSAPP_PRUEBA',
+      entidad: 'WHATSAPP',
+      descripcion: `Prueba ${mode} enviada a ${toDigits}`,
+    });
+
+    res.json({
+      ok: true,
+      mode,
+      to: toDigits,
+      templateName,
+      langCode,
+      phoneNumberId: waConfig.phoneNumberId,
+      messageId: result?.messages?.[0]?.id || null,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'Error enviando la prueba de WhatsApp.'),
+    });
+  }
+});
+
+app.post('/whatsapp/send-due-today', requireRole('ADMIN'), async (req, res) => {
+  try {
+    res.json(
+      await executeWhatsAppReminders({
+        usuarioId: req.authUser?.id,
+        trigger: 'MANUAL',
+      })
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: getFriendlyErrorMessage(error, 'Error enviando WhatsApp.'),
+    });
+  }
+});
+
+app.get('/webhooks/whatsapp', async (req, res) => {
+  try {
+    const mode = cleanText(req.query['hub.mode']);
+    const verifyToken = cleanText(req.query['hub.verify_token']);
+    const challenge = cleanText(req.query['hub.challenge']);
+    const waConfig = await getWhatsAppSettings();
+
+    if (mode === 'subscribe' && verifyToken && verifyToken === cleanText(waConfig.webhookVerifyToken)) {
+      return res.status(200).send(challenge);
+    }
+
+    return res.status(403).send('Forbidden');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Webhook verification failed');
+  }
+});
+
+app.post('/webhooks/whatsapp', async (req, res) => {
+  try {
+    const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+    const waConfig = await getWhatsAppSettings();
+    const notifyPhoneDigits = normalizePhoneDigits(waConfig.notifyPhone);
+
+    for (const entry of entries) {
+      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+
+      for (const change of changes) {
+        const value = change?.value || {};
+        const contacts = Array.isArray(value?.contacts) ? value.contacts : [];
+        const messages = Array.isArray(value?.messages) ? value.messages : [];
+
+        for (const message of messages) {
+          const telefono = normalizePhoneDigits(message?.from);
+          if (!telefono) continue;
+
+          const matchingContact =
+            contacts.find((contact) => normalizePhoneDigits(contact?.wa_id) === telefono) || contacts[0] || null;
+          const profileName = cleanText(matchingContact?.profile?.name);
+          const clienteNombre = await resolveChatClienteNombre(telefono, profileName);
+          const detalle = extractWhatsAppMessageText(message);
+          const fechaObjetivo = parseWhatsAppWebhookTimestamp(message?.timestamp);
+          const existingMessageLog = await prisma.whatsAppLog.findFirst({
+            where: {
+              telefono,
+              estado: 'CHAT_RECIBIDO',
+              detalle,
+              fechaObjetivo,
+            },
+          });
+
+          if (existingMessageLog) {
+            continue;
+          }
+
+          await prisma.whatsAppLog.create({
+            data: {
+              clienteNombre,
+              telefono,
+              fechaObjetivo,
+              estado: 'CHAT_RECIBIDO',
+              detalle,
+            },
+          });
+
+          const decision = detectCustomerDecision(detalle);
+          if (!decision || !notifyPhoneDigits || notifyPhoneDigits === telefono) {
+            continue;
+          }
+
+          const alertText = buildOwnerDecisionAlertMessage({
+            clienteNombre,
+            clienteTelefono: telefono,
+            decision,
+            rawText: detalle,
+          });
+
+          try {
+            await sendWhatsAppTextMessage({
+              toDigits: notifyPhoneDigits,
+              body: alertText,
+            });
+
+            await prisma.whatsAppLog.create({
+              data: {
+                clienteNombre,
+                telefono: notifyPhoneDigits,
+                fechaObjetivo: new Date(),
+                estado: 'CHAT_ALERTA_ENVIADA',
+                detalle: alertText,
+              },
+            });
+
+            await registrarActividad({
+              accion: 'WHATSAPP_ALERTA_RESPUESTA',
+              entidad: 'WHATSAPP',
+              descripcion: `Alerta de respuesta ${decision} enviada a ${notifyPhoneDigits} por ${clienteNombre || telefono}`,
+            });
+          } catch (notifyError) {
+            console.error('No se pudo notificar la respuesta al número configurado:', notifyError);
+
+            await prisma.whatsAppLog.create({
+              data: {
+                clienteNombre,
+                telefono: notifyPhoneDigits,
+                fechaObjetivo: new Date(),
+                estado: 'CHAT_ALERTA_ERROR',
+                detalle: getFriendlyErrorMessage(
+                  notifyError,
+                  'No se pudo enviar la alerta de respuesta por WhatsApp.'
+                ),
+              },
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error procesando el webhook de WhatsApp.' });
+  }
+});
+
+app.get('/whatsapp/chats', requireAuth, async (req, res) => {
+  try {
+    const rows = await prisma.whatsAppLog.findMany({
+      where: {
+        estado: {
+          in: ['CHAT_RECIBIDO', 'CHAT_ENVIADO', 'CHAT_ERROR'],
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+
+    res.json(buildWhatsAppChatRows(rows));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al listar conversaciones de WhatsApp.' });
+  }
+});
+
+app.get('/whatsapp/chats/:telefono/messages', requireAuth, async (req, res) => {
+  try {
+    const telefono = normalizePhoneDigits(req.params.telefono);
+
+    if (!telefono) {
+      return res.status(400).json({ error: 'Telefono invalido.' });
+    }
+
+    const rows = await prisma.whatsAppLog.findMany({
+      where: {
+        telefono,
+        estado: {
+          in: ['CHAT_RECIBIDO', 'CHAT_ENVIADO', 'CHAT_ERROR'],
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+
+    res.json(
+      rows.map((row) => ({
+        id: row.id,
+        telefono,
+        clienteNombre: row.clienteNombre || 'Cliente',
+        text: cleanText(row.detalle) || '',
+        direction: cleanText(row.estado) === 'CHAT_RECIBIDO' ? 'IN' : 'OUT',
+        status: cleanText(row.estado) || 'CHAT_RECIBIDO',
+        createdAt: toIsoDateTime(row.createdAt),
+      }))
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al listar mensajes del chat.' });
+  }
+});
+
+app.post('/whatsapp/chats/:telefono/reply', requireAuth, async (req, res) => {
+  try {
+    const telefono = normalizePhoneDigits(req.params.telefono);
+    const text = cleanText(req.body.text);
+
+    if (!telefono) {
+      return res.status(400).json({ error: 'Telefono invalido.' });
+    }
+
+    if (!text) {
+      return res.status(400).json({ error: 'Escribe un mensaje para responder.' });
+    }
+
+    const result = await sendWhatsAppTextMessage({
+      toDigits: telefono,
+      body: text,
+    });
+    const clienteNombre = await resolveChatClienteNombre(telefono);
+
+    await prisma.whatsAppLog.create({
+      data: {
+        clienteNombre,
+        telefono,
+        fechaObjetivo: new Date(),
+        estado: 'CHAT_ENVIADO',
+        detalle: text,
+      },
+    });
+
+    await registrarActividad({
+      usuarioId: req.authUser?.id,
+      accion: 'WHATSAPP_RESPONDER',
+      entidad: 'WHATSAPP',
+      descripcion: `Respuesta enviada a ${telefono}`,
+    });
+
+    res.json({
+      ok: true,
+      to: telefono,
+      messageId: result?.messages?.[0]?.id || null,
+    });
+  } catch (error) {
+    console.error(error);
+
+    const telefono = normalizePhoneDigits(req.params.telefono);
+    if (telefono) {
+      const clienteNombre = await resolveChatClienteNombre(telefono).catch(() => 'Cliente');
+      await prisma.whatsAppLog.create({
+        data: {
+          clienteNombre,
+          telefono,
+          fechaObjetivo: new Date(),
+          estado: 'CHAT_ERROR',
+          detalle: getFriendlyErrorMessage(error, 'No se pudo enviar la respuesta.'),
+        },
+      }).catch(() => {});
+    }
+
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'Error enviando la respuesta de WhatsApp.'),
+    });
+  }
+});
+
+app.post('/whatsapp/test-legacy-disabled', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const toDigits = normalizePhoneDigits(req.body.to);
     const mode = cleanText(req.body.mode || 'configured');
     const cliente = cleanText(req.body.cliente || 'Cliente de prueba');
     const fechaCierre = cleanText(req.body.fechaCierre || formatDateForMessage(new Date()));
@@ -2974,7 +4348,7 @@ app.post('/whatsapp/test', requireRole('ADMIN'), async (req, res) => {
   }
 });
 
-app.post('/whatsapp/send-due-today', requireRole('ADMIN'), async (req, res) => {
+app.post('/whatsapp/send-due-today-legacy-disabled', requireRole('ADMIN'), async (req, res) => {
   try {
     const waEnabled = await isWhatsAppEnabled();
 
@@ -3158,4 +4532,5 @@ app.get('/dashboard/resumen', requireAuth, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
+  startWhatsAppReminderScheduler();
 });
