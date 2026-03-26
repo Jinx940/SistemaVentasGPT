@@ -274,6 +274,39 @@ const emptyDashboard: DashboardResumenResponse = {
   overdueRows: [],
 }
 
+function normalizeWebhookUrl(value: string) {
+  return String(value || '').trim()
+}
+
+function isPlaceholderWebhookUrl(value: string) {
+  const normalized = normalizeWebhookUrl(value).toLowerCase()
+  return (
+    normalized.includes('tu-backend.onrender.com') ||
+    normalized.includes('example.com') ||
+    normalized.includes('mi-backend')
+  )
+}
+
+function isValidPublicWebhookUrl(value: string) {
+  const normalized = normalizeWebhookUrl(value)
+  if (!normalized) return false
+
+  try {
+    const parsed = new URL(normalized)
+    const host = parsed.hostname.toLowerCase()
+
+    return (
+      parsed.protocol === 'https:' &&
+      !host.includes('localhost') &&
+      host !== '127.0.0.1' &&
+      host !== '0.0.0.0' &&
+      parsed.pathname.endsWith('/webhooks/whatsapp')
+    )
+  } catch {
+    return false
+  }
+}
+
 const emptyAuthForm: AuthFormState = {
   nombre: '',
   correo: '',
@@ -1942,6 +1975,21 @@ function App() {
     e.preventDefault()
     limpiarMensajes()
 
+    const normalizedWebhookUrl = normalizeWebhookUrl(whatsAppConfig.webhookUrl)
+    if (normalizedWebhookUrl) {
+      if (isPlaceholderWebhookUrl(normalizedWebhookUrl)) {
+        setError('Reemplaza la URL de ejemplo del webhook por tu dominio real de Render.')
+        return
+      }
+
+      if (!isValidPublicWebhookUrl(normalizedWebhookUrl)) {
+        setError(
+          'La URL del webhook debe ser publica, usar https y terminar en /webhooks/whatsapp.'
+        )
+        return
+      }
+    }
+
     openConfirmModal({
       title: 'Guardar configuración',
       message: 'Se actualizará la configuración de WhatsApp.',
@@ -1952,7 +2000,7 @@ function App() {
           await saveWhatsAppConfig({
             graphVersion: whatsAppConfig.graphVersion,
             phoneNumberId: whatsAppConfig.phoneNumberId,
-            webhookUrl: whatsAppConfig.webhookUrl,
+            webhookUrl: normalizedWebhookUrl,
             webhookVerifyToken: whatsAppConfig.webhookVerifyToken,
             notifyPhone: whatsAppConfig.notifyPhone,
             templateName: whatsAppConfig.dueTodayTemplateName,
@@ -2367,7 +2415,7 @@ function App() {
   )
   const defaultWhatsAppWebhookUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')}/webhooks/whatsapp`
   const whatsAppWebhookUrl =
-    whatsAppConfig.webhookUrl.trim() || defaultWhatsAppWebhookUrl
+    normalizeWebhookUrl(whatsAppConfig.webhookUrl) || defaultWhatsAppWebhookUrl
   const visibleNavItems = useMemo(
     () =>
       [

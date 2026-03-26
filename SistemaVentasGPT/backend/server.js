@@ -1405,6 +1405,9 @@ function detectCustomerDecision(text) {
   const positivePatterns = [
     'si',
     'si deseo continuar',
+    'si continuar',
+    'si continuare',
+    'si continuar con el servicio',
     'quiero continuar',
     'deseo continuar',
     'continuar',
@@ -1413,9 +1416,11 @@ function detectCustomerDecision(text) {
   const negativePatterns = [
     'no',
     'no deseo continuar',
+    'no continuar',
+    'no continuare',
+    'no continuar con el servicio',
     'no quiero continuar',
     'ya no',
-    'no continuar',
   ];
 
   if (positivePatterns.includes(normalized)) {
