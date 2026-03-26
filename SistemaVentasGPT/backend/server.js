@@ -4059,8 +4059,14 @@ app.get('/webhooks/whatsapp', async (req, res) => {
     const verifyToken = cleanText(req.query['hub.verify_token']);
     const challenge = cleanText(req.query['hub.challenge']);
     const waConfig = await getWhatsAppSettings();
+    const tokenMatches =
+      !!verifyToken && verifyToken === cleanText(waConfig.webhookVerifyToken);
 
-    if (mode === 'subscribe' && verifyToken && verifyToken === cleanText(waConfig.webhookVerifyToken)) {
+    console.log(
+      `[WA_WEBHOOK_GET] mode=${mode || '-'} challenge=${challenge ? 'ok' : 'empty'} tokenMatch=${tokenMatches}`
+    );
+
+    if (mode === 'subscribe' && tokenMatches) {
       return res.status(200).send(challenge);
     }
 
@@ -4076,6 +4082,20 @@ app.post('/webhooks/whatsapp', async (req, res) => {
     const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
     const waConfig = await getWhatsAppSettings();
     const notifyPhoneDigits = normalizePhoneDigits(waConfig.notifyPhone);
+    const totalMessages = entries.reduce((sum, entry) => {
+      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+      return (
+        sum +
+        changes.reduce((innerSum, change) => {
+          const messages = Array.isArray(change?.value?.messages) ? change.value.messages : [];
+          return innerSum + messages.length;
+        }, 0)
+      );
+    }, 0);
+
+    console.log(
+      `[WA_WEBHOOK_POST] entries=${entries.length} messages=${totalMessages} notifyPhone=${notifyPhoneDigits || '-'}`
+    );
 
     for (const entry of entries) {
       const changes = Array.isArray(entry?.changes) ? entry.changes : [];
@@ -4095,6 +4115,9 @@ app.post('/webhooks/whatsapp', async (req, res) => {
           const clienteNombre = await resolveChatClienteNombre(telefono, profileName);
           const detalle = extractWhatsAppMessageText(message);
           const fechaObjetivo = parseWhatsAppWebhookTimestamp(message?.timestamp);
+          console.log(
+            `[WA_MESSAGE_IN] from=${telefono} type=${cleanText(message?.type) || '-'} text="${detalle}"`
+          );
           const existingMessageLog = await prisma.whatsAppLog.findFirst({
             where: {
               telefono,
@@ -4119,6 +4142,9 @@ app.post('/webhooks/whatsapp', async (req, res) => {
           });
 
           const decision = detectCustomerDecision(detalle);
+          console.log(
+            `[WA_DECISION] from=${telefono} decision=${decision || '-'} notifyTarget=${notifyPhoneDigits || '-'}`
+          );
           if (!decision || !notifyPhoneDigits || notifyPhoneDigits === telefono) {
             continue;
           }
@@ -4173,6 +4199,7 @@ app.post('/webhooks/whatsapp', async (req, res) => {
 
     res.status(200).json({ ok: true });
   } catch (error) {
+    console.error('[WA_WEBHOOK_POST_ERROR]', error);
     console.error(error);
     res.status(500).json({ error: 'Error procesando el webhook de WhatsApp.' });
   }
