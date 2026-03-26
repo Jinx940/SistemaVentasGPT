@@ -404,6 +404,51 @@ function getWhatsAppTestSuccessMessage(mode: WhatsAppTestFormState['mode']) {
   return 'Prueba hello_world enviada correctamente.'
 }
 
+type ConfigAccordionProps = {
+  title: string
+  description: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}
+
+function ConfigAccordion({ title, description, defaultOpen = false, children }: ConfigAccordionProps) {
+  return (
+    <details
+      open={defaultOpen}
+      style={{
+        borderRadius: '18px',
+        border: '1px solid rgba(148,163,184,0.12)',
+        background: 'rgba(2,6,23,0.26)',
+        overflow: 'hidden',
+      }}
+    >
+      <summary
+        style={{
+          cursor: 'pointer',
+          padding: '16px 18px',
+          color: '#f8fafc',
+          fontWeight: 700,
+          listStyle: 'auto',
+        }}
+      >
+        <span>{title}</span>
+        <div style={{ color: '#94a3b8', fontWeight: 500, fontSize: '13px', marginTop: '6px' }}>{description}</div>
+      </summary>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: '12px',
+          padding: '0 18px 18px',
+          borderTop: '1px solid rgba(148,163,184,0.08)',
+        }}
+      >
+        {children}
+      </div>
+    </details>
+  )
+}
+
 function formatChatTimestamp(value?: string | null) {
   if (!value) return '-'
 
@@ -4743,273 +4788,298 @@ function App() {
 
                   <form onSubmit={guardarWhatsAppConfig}>
                     <div style={{ display: 'grid', gap: '12px' }}>
-                      <input
-                        value={whatsAppConfig.graphVersion}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, graphVersion: e.target.value }))
-                        }
-                        placeholder="Graph version"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.phoneNumberId}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, phoneNumberId: e.target.value }))
-                        }
-                        placeholder="Phone Number ID"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.webhookUrl}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))
-                        }
-                        placeholder={`Webhook URL publico (si lo dejas vacio: ${defaultWhatsAppWebhookUrl})`}
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.webhookVerifyToken}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, webhookVerifyToken: e.target.value }))
-                        }
-                        placeholder="Webhook verify token"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.notifyPhone}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, notifyPhone: e.target.value }))
-                        }
-                        placeholder="Numero para alertas de respuesta (+51989267132)"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.replyAlertTemplateName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, replyAlertTemplateName: e.target.value }))
-                        }
-                        placeholder="Plantilla alerta respuesta"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.replyAlertLangCode}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, replyAlertLangCode: e.target.value }))
-                        }
-                        placeholder="Idioma alerta respuesta"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.dueTomorrowTemplateName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowTemplateName: e.target.value }))
-                        }
-                        placeholder="Plantilla vence manana"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.dueTomorrowLangCode}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowLangCode: e.target.value }))
-                        }
-                        placeholder="Idioma vence manana"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.dueTodayTemplateName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({
-                            ...prev,
-                            templateName: e.target.value,
-                            dueTodayTemplateName: e.target.value,
-                          }))
-                        }
-                        placeholder="Plantilla vence hoy"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.dueTodayLangCode}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({
-                            ...prev,
-                            langCode: e.target.value,
-                            dueTodayLangCode: e.target.value,
-                          }))
-                        }
-                        placeholder="Idioma vence hoy"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.overdueTemplateName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, overdueTemplateName: e.target.value }))
-                        }
-                        placeholder="Plantilla vencido"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.overdueLangCode}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, overdueLangCode: e.target.value }))
-                        }
-                        placeholder="Idioma vencido"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.accessUpdateTemplateName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, accessUpdateTemplateName: e.target.value }))
-                        }
-                        placeholder="Plantilla cambio de acceso"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.accessUpdateLangCode}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, accessUpdateLangCode: e.target.value }))
-                        }
-                        placeholder="Idioma cambio de acceso"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.paymentMethods}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, paymentMethods: e.target.value }))
-                        }
-                        placeholder="Metodos de pago"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.paymentPhone}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, paymentPhone: e.target.value }))
-                        }
-                        placeholder="Numero de cobro"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppConfig.paymentContactName}
-                        onChange={(e) =>
-                          setWhatsAppConfig((prev) => ({ ...prev, paymentContactName: e.target.value }))
-                        }
-                        placeholder="Nombre de cobro"
-                        style={inputStyle}
-                      />
-                      <input
-                        value={whatsAppTokenInput}
-                        onChange={(e) => setWhatsAppTokenInput(e.target.value)}
-                        placeholder={whatsAppConfig.hasToken ? 'Nuevo token (opcional)' : 'Access token'}
-                        style={inputStyle}
-                      />
-                      <div
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: '14px',
-                          border: '1px solid rgba(148,163,184,0.12)',
-                          background: 'rgba(2,6,23,0.28)',
-                          color: '#94a3b8',
-                          fontSize: '12px',
-                          lineHeight: 1.6,
-                        }}
+                      <ConfigAccordion
+                        title="Canal y webhook"
+                        description="Version, numero emisor, webhook, numero de alerta y token del canal."
                       >
-                        URL efectivo del webhook: <b style={{ color: '#f8fafc' }}>{whatsAppWebhookUrl}</b>
-                        <br />
-                        Si tu backend está desplegado, pega aquí su URL pública completa terminando en <b style={{ color: '#f8fafc' }}>/webhooks/whatsapp</b>.
-                        <br />
-                        Luego configura en Meta ese callback URL y usa este verify token:{' '}
-                        <b style={{ color: '#f8fafc' }}>{whatsAppConfig.webhookVerifyToken || 'sistema-cobro-whatsapp'}</b>
-                      </div>
-
-                      <div
-                        style={{
-                          marginTop: '8px',
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                          gap: '12px',
-                          padding: '14px',
-                          borderRadius: '16px',
-                          background: 'rgba(2,6,23,0.32)',
-                          border: '1px solid rgba(148,163,184,0.12)',
-                        }}
-                      >
-                        <div style={{ gridColumn: '1 / -1', color: '#f8fafc', fontWeight: 700 }}>
-                          Prueba de WhatsApp
-                        </div>
-                        <input
-                          value={whatsAppTestForm.to}
-                          onChange={(e) =>
-                            setWhatsAppTestForm((prev) => ({ ...prev, to: e.target.value }))
-                          }
-                          placeholder="Número destino (+519...)"
-                          style={inputStyle}
-                        />
-                        <select
-                          value={whatsAppTestForm.mode}
-                          onChange={(e) =>
-                            setWhatsAppTestForm((prev) => ({
-                              ...prev,
-                              mode: e.target.value as WhatsAppTestFormState['mode'],
-                            }))
-                          }
-                          style={inputStyle}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                            gap: '12px',
+                          }}
                         >
-                          <option value="due_tomorrow">Vence manana</option>
-                          <option value="due_today">Vence hoy</option>
-                          <option value="overdue">Vencido</option>
-                          <option value="access_update">Cambio de acceso</option>
-                          <option value="hello_world">hello_world</option>
-                        </select>
-                        <input
-                          value={whatsAppTestForm.cliente}
-                          onChange={(e) =>
-                            setWhatsAppTestForm((prev) => ({ ...prev, cliente: e.target.value }))
-                          }
-                          placeholder="Nombre de prueba"
-                          style={inputStyle}
-                        />
-                        {whatsAppTestForm.mode === 'access_update' ? (
-                          <>
-                            <input
-                              value={whatsAppTestForm.correoCuenta}
-                              onChange={(e) =>
-                                setWhatsAppTestForm((prev) => ({ ...prev, correoCuenta: e.target.value }))
-                              }
-                              placeholder="Correo de acceso"
-                              style={inputStyle}
-                            />
-                            <input
-                              value={whatsAppTestForm.passwordCuenta}
-                              onChange={(e) =>
-                                setWhatsAppTestForm((prev) => ({ ...prev, passwordCuenta: e.target.value }))
-                              }
-                              placeholder="Contrasena de acceso"
-                              style={inputStyle}
-                            />
-                          </>
-                        ) : (
-                          <>
-                            <input
-                              type="date"
-                              value={whatsAppTestForm.fechaCierre}
-                              onChange={(e) =>
-                                setWhatsAppTestForm((prev) => ({ ...prev, fechaCierre: e.target.value }))
-                              }
-                              style={inputStyle}
-                            />
-                            <input
-                              value={whatsAppTestForm.monto}
-                              onChange={(e) =>
-                                setWhatsAppTestForm((prev) => ({ ...prev, monto: e.target.value }))
-                              }
-                              placeholder="Monto de prueba"
-                              style={inputStyle}
-                            />
-                          </>
-                        )}
-                        <button type="button" onClick={() => void runWhatsAppTest()} style={buttonSecondary}>
-                          Enviar prueba
-                        </button>
-                      </div>
+                          <input
+                            value={whatsAppConfig.graphVersion}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, graphVersion: e.target.value }))
+                            }
+                            placeholder="Graph version"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.phoneNumberId}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, phoneNumberId: e.target.value }))
+                            }
+                            placeholder="Phone Number ID"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.webhookUrl}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, webhookUrl: e.target.value }))
+                            }
+                            placeholder={`Webhook URL publico (si lo dejas vacio: ${defaultWhatsAppWebhookUrl})`}
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.webhookVerifyToken}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, webhookVerifyToken: e.target.value }))
+                            }
+                            placeholder="Webhook verify token"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.notifyPhone}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, notifyPhone: e.target.value }))
+                            }
+                            placeholder="Numero para alertas de respuesta (+51989267132)"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppTokenInput}
+                            onChange={(e) => setWhatsAppTokenInput(e.target.value)}
+                            placeholder={whatsAppConfig.hasToken ? 'Nuevo token (opcional)' : 'Access token'}
+                            style={inputStyle}
+                          />
+                        </div>
+
+                        <div
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '14px',
+                            border: '1px solid rgba(148,163,184,0.12)',
+                            background: 'rgba(2,6,23,0.28)',
+                            color: '#94a3b8',
+                            fontSize: '12px',
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          URL efectivo del webhook: <b style={{ color: '#f8fafc' }}>{whatsAppWebhookUrl}</b>
+                          <br />
+                          Si tu backend está desplegado, pega aquí su URL pública completa terminando en <b style={{ color: '#f8fafc' }}>/webhooks/whatsapp</b>.
+                          <br />
+                          Luego configura en Meta ese callback URL y usa este verify token:{' '}
+                          <b style={{ color: '#f8fafc' }}>{whatsAppConfig.webhookVerifyToken || 'sistema-cobro-whatsapp'}</b>
+                        </div>
+                      </ConfigAccordion>
+
+                      <ConfigAccordion
+                        title="Plantillas y cobros"
+                        description="Configura las plantillas, idiomas y tus datos fijos de pago."
+                      >
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                            gap: '12px',
+                          }}
+                        >
+                          <input
+                            value={whatsAppConfig.replyAlertTemplateName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, replyAlertTemplateName: e.target.value }))
+                            }
+                            placeholder="Plantilla alerta respuesta"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.replyAlertLangCode}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, replyAlertLangCode: e.target.value }))
+                            }
+                            placeholder="Idioma alerta respuesta"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.dueTomorrowTemplateName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowTemplateName: e.target.value }))
+                            }
+                            placeholder="Plantilla vence manana"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.dueTomorrowLangCode}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, dueTomorrowLangCode: e.target.value }))
+                            }
+                            placeholder="Idioma vence manana"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.dueTodayTemplateName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({
+                                ...prev,
+                                templateName: e.target.value,
+                                dueTodayTemplateName: e.target.value,
+                              }))
+                            }
+                            placeholder="Plantilla vence hoy"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.dueTodayLangCode}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({
+                                ...prev,
+                                langCode: e.target.value,
+                                dueTodayLangCode: e.target.value,
+                              }))
+                            }
+                            placeholder="Idioma vence hoy"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.overdueTemplateName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, overdueTemplateName: e.target.value }))
+                            }
+                            placeholder="Plantilla vencido"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.overdueLangCode}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, overdueLangCode: e.target.value }))
+                            }
+                            placeholder="Idioma vencido"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.accessUpdateTemplateName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, accessUpdateTemplateName: e.target.value }))
+                            }
+                            placeholder="Plantilla cambio de acceso"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.accessUpdateLangCode}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, accessUpdateLangCode: e.target.value }))
+                            }
+                            placeholder="Idioma cambio de acceso"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.paymentMethods}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, paymentMethods: e.target.value }))
+                            }
+                            placeholder="Metodos de pago"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.paymentPhone}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, paymentPhone: e.target.value }))
+                            }
+                            placeholder="Numero de cobro"
+                            style={inputStyle}
+                          />
+                          <input
+                            value={whatsAppConfig.paymentContactName}
+                            onChange={(e) =>
+                              setWhatsAppConfig((prev) => ({ ...prev, paymentContactName: e.target.value }))
+                            }
+                            placeholder="Nombre de cobro"
+                            style={inputStyle}
+                          />
+                        </div>
+                      </ConfigAccordion>
+
+                      <ConfigAccordion
+                        title="Prueba de WhatsApp"
+                        description="Haz pruebas manuales sin abrir toda la configuracion del canal."
+                      >
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                            gap: '12px',
+                          }}
+                        >
+                          <input
+                            value={whatsAppTestForm.to}
+                            onChange={(e) =>
+                              setWhatsAppTestForm((prev) => ({ ...prev, to: e.target.value }))
+                            }
+                            placeholder="Número destino (+519...)"
+                            style={inputStyle}
+                          />
+                          <select
+                            value={whatsAppTestForm.mode}
+                            onChange={(e) =>
+                              setWhatsAppTestForm((prev) => ({
+                                ...prev,
+                                mode: e.target.value as WhatsAppTestFormState['mode'],
+                              }))
+                            }
+                            style={inputStyle}
+                          >
+                            <option value="due_tomorrow">Vence manana</option>
+                            <option value="due_today">Vence hoy</option>
+                            <option value="overdue">Vencido</option>
+                            <option value="access_update">Cambio de acceso</option>
+                            <option value="hello_world">hello_world</option>
+                          </select>
+                          <input
+                            value={whatsAppTestForm.cliente}
+                            onChange={(e) =>
+                              setWhatsAppTestForm((prev) => ({ ...prev, cliente: e.target.value }))
+                            }
+                            placeholder="Nombre de prueba"
+                            style={inputStyle}
+                          />
+                          {whatsAppTestForm.mode === 'access_update' ? (
+                            <>
+                              <input
+                                value={whatsAppTestForm.correoCuenta}
+                                onChange={(e) =>
+                                  setWhatsAppTestForm((prev) => ({ ...prev, correoCuenta: e.target.value }))
+                                }
+                                placeholder="Correo de acceso"
+                                style={inputStyle}
+                              />
+                              <input
+                                value={whatsAppTestForm.passwordCuenta}
+                                onChange={(e) =>
+                                  setWhatsAppTestForm((prev) => ({ ...prev, passwordCuenta: e.target.value }))
+                                }
+                                placeholder="Contrasena de acceso"
+                                style={inputStyle}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="date"
+                                value={whatsAppTestForm.fechaCierre}
+                                onChange={(e) =>
+                                  setWhatsAppTestForm((prev) => ({ ...prev, fechaCierre: e.target.value }))
+                                }
+                                style={inputStyle}
+                              />
+                              <input
+                                value={whatsAppTestForm.monto}
+                                onChange={(e) =>
+                                  setWhatsAppTestForm((prev) => ({ ...prev, monto: e.target.value }))
+                                }
+                                placeholder="Monto de prueba"
+                                style={inputStyle}
+                              />
+                            </>
+                          )}
+                          <button type="button" onClick={() => void runWhatsAppTest()} style={buttonSecondary}>
+                            Enviar prueba
+                          </button>
+                        </div>
+                      </ConfigAccordion>
 
                       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                         <button type="submit" style={buttonPrimary}>
