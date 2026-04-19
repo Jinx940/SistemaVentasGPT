@@ -1236,7 +1236,7 @@ function App() {
   }, [authCheckNonce])
 
   useEffect(() => {
-    if (!matchedClienteByPhone) return
+    if (!matchedClienteByPhone || editingVentaId) return
 
     setVentaForm((prev) => {
       const next = {
@@ -1258,7 +1258,7 @@ function App() {
 
       return next
     })
-  }, [matchedClienteByPhone])
+  }, [editingVentaId, matchedClienteByPhone])
 
   useEffect(() => {
     if (!currentUser || activeTab !== 'chats') return
@@ -2606,6 +2606,12 @@ function App() {
 
   const cantidadTiposSeleccionados = countVentaDevices(ventaForm)
   const ventaStatusSummary = getVentaStatusSummary(ventaForm)
+  const ventaClientDataLocked = Boolean(matchedClienteByPhone) || editingVentaId !== null
+  const ventaPhoneLocked = editingVentaId !== null
+  const registroVentaTitle = editingVentaId ? 'Editar venta' : 'Registrar venta'
+  const registroVentaDescription = editingVentaId
+    ? 'Actualiza los datos de esta venta. Si necesitas corregir nombre, monto, carpeta u observación del cliente, hazlo desde la pestaña Clientes.'
+    : 'Primero registra el cliente en la pestaña Clientes. Luego aquí puedes registrar su venta usando los datos ya guardados.'
   const isAdmin = currentUser?.rol === 'ADMIN'
   const selectedWhatsAppChat = useMemo(
     () => whatsAppChats.find((chat) => chat.telefono === selectedWhatsAppChatPhone) || null,
@@ -2619,7 +2625,7 @@ function App() {
       [
         { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
         { key: 'morosos', label: 'Morosos', icon: 'morosos' },
-        { key: 'registro', label: 'Registrar / Editar', icon: 'registro' },
+        { key: 'registro', label: 'Registrar', icon: 'registro' },
         { key: 'ventas', label: 'Ventas', icon: 'ventas' },
         { key: 'clientes', label: 'Clientes', icon: 'clientes' },
         ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
@@ -3310,9 +3316,9 @@ function App() {
                   <div style={{ display: 'grid', gap: '20px' }}>
                     <div style={{ ...cardStyle, width: '100%', minWidth: 0, overflow: 'hidden' }}>
                       <div style={{ marginBottom: '14px' }}>
-                        <h2 style={{ marginTop: 0, color: '#f8fafc' }}>Registrar / Editar venta</h2>
+                        <h2 style={{ marginTop: 0, color: '#f8fafc' }}>{registroVentaTitle}</h2>
                         <p style={{ marginTop: '6px', color: '#94a3b8', fontSize: '14px' }}>
-                          Registra el mes activo del cliente y elige si el pago ya fue recibido o si debe quedar pendiente.
+                          {registroVentaDescription}
                         </p>
                       </div>
 
@@ -3387,8 +3393,21 @@ function App() {
                                     placeholder="Nombre del cliente"
                                     value={ventaForm.cliente || ''}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    readOnly={ventaClientDataLocked}
+                                    style={{
+                                      ...inputStyle,
+                                      background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
+                                      cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
+                                      opacity: ventaClientDataLocked ? 0.88 : 1,
+                                    }}
                                   />
+                                  {ventaClientDataLocked && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                      {editingVentaId
+                                        ? 'El nombre del cliente se corrige desde la pestaña Clientes.'
+                                        : 'Este dato se está usando desde el cliente ya registrado.'}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -3403,7 +3422,12 @@ function App() {
                                     <select
                                       value={telefonoPais}
                                       onChange={(e) => setTelefonoPais(e.target.value)}
-                                      style={inputStyle}
+                                      disabled={ventaPhoneLocked}
+                                      style={{
+                                        ...inputStyle,
+                                        opacity: ventaPhoneLocked ? 0.7 : 1,
+                                        cursor: ventaPhoneLocked ? 'not-allowed' : 'pointer',
+                                      }}
                                     >
                                       {PHONE_COUNTRIES.map((country) => (
                                         <option key={country.dialCode} value={country.dialCode}>
@@ -3417,13 +3441,24 @@ function App() {
                                       placeholder="Ej: 950000000"
                                       value={ventaForm.telefono}
                                       onChange={handleVentaChange}
-                                      style={inputStyle}
+                                      readOnly={ventaPhoneLocked}
+                                      style={{
+                                        ...inputStyle,
+                                        background: ventaPhoneLocked ? '#0b1730' : inputStyle.background,
+                                        cursor: ventaPhoneLocked ? 'not-allowed' : 'text',
+                                        opacity: ventaPhoneLocked ? 0.88 : 1,
+                                      }}
                                     />
                                   </div>
                                   {matchedClienteByPhone && (
                                     <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px', lineHeight: 1.55 }}>
                                       Cliente encontrado: se cargaron automáticamente nombre, monto, carpeta y observación de{' '}
-                                      <b>{matchedClienteByPhone.nombre}</b>.
+                                      <b>{matchedClienteByPhone.nombre}</b>. Si necesitas corregir esos datos, edítalos en la pestaña Clientes.
+                                    </div>
+                                  )}
+                                  {editingVentaId && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                      Al editar una venta, el cliente y su teléfono se conservan. Si necesitas cambiar esos datos, hazlo desde Clientes.
                                     </div>
                                   )}
                                 </div>
@@ -3482,8 +3517,19 @@ function App() {
                                     placeholder="Monto"
                                     value={ventaForm.monto}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    readOnly={ventaClientDataLocked}
+                                    style={{
+                                      ...inputStyle,
+                                      background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
+                                      cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
+                                      opacity: ventaClientDataLocked ? 0.88 : 1,
+                                    }}
                                   />
+                                  {ventaClientDataLocked && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                      El monto fijo del cliente se administra desde Clientes.
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -3665,8 +3711,19 @@ function App() {
                                     placeholder="Carpeta"
                                     value={ventaForm.carpeta || ''}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    readOnly={ventaClientDataLocked}
+                                    style={{
+                                      ...inputStyle,
+                                      background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
+                                      cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
+                                      opacity: ventaClientDataLocked ? 0.88 : 1,
+                                    }}
                                   />
+                                  {ventaClientDataLocked && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                      La carpeta del cliente se corrige desde Clientes.
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div style={{ gridColumn: '1 / -1' }}>
@@ -3675,8 +3732,21 @@ function App() {
                                     name="observacion"
                                     value={ventaForm.observacion}
                                     onChange={handleVentaChange}
-                                    style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
+                                    readOnly={ventaClientDataLocked}
+                                    style={{
+                                      ...inputStyle,
+                                      minHeight: '110px',
+                                      resize: 'vertical',
+                                      background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
+                                      cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
+                                      opacity: ventaClientDataLocked ? 0.88 : 1,
+                                    }}
                                   />
+                                  {ventaClientDataLocked && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                      La observación del cliente se edita desde Clientes.
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </VentaFormStepCard>
@@ -4082,6 +4152,9 @@ function App() {
                   <h2 style={{ marginTop: 0, color: '#f8fafc' }}>
                     {editingClienteId ? 'Editar cliente' : 'Registrar cliente'}
                   </h2>
+                  <p style={{ marginTop: '6px', marginBottom: '16px', color: '#94a3b8', fontSize: '14px', lineHeight: 1.55 }}>
+                    Aquí se guardan los datos maestros del cliente. Luego, en la pestaña Registrar, esos datos se completan automáticamente al ingresar su teléfono.
+                  </p>
 
                   <form onSubmit={guardarCliente}>
                     <div style={{ display: 'grid', gap: '12px' }}>

@@ -587,10 +587,21 @@ function compareByFechaCierreAsc(a, b) {
 }
 
 
-async function upsertClienteFromVenta(body, clienteId = null) {
+async function upsertClienteFromVenta(body, clienteId = null, options = {}) {
   const clienteData = buildClienteData(body);
+  const preserveExisting = !!options.preserveExisting;
 
   if (clienteId) {
+    if (preserveExisting) {
+      const actual = await prisma.cliente.findUnique({
+        where: { id: clienteId },
+      });
+
+      if (actual) {
+        return actual;
+      }
+    }
+
     return prisma.cliente.update({
       where: { id: clienteId },
       data: clienteData,
@@ -600,6 +611,10 @@ async function upsertClienteFromVenta(body, clienteId = null) {
   const existente = await findClienteByTelefono(clienteData.telefono);
 
   if (existente) {
+    if (preserveExisting) {
+      return existente;
+    }
+
     return prisma.cliente.update({
       where: { id: existente.id },
       data: clienteData,
@@ -3710,7 +3725,9 @@ app.post('/ventas', requireAuth, async (req, res) => {
     const baseData = buildVentaData(req.body, { defaultEstado: 'PAGADO' });
     const assignmentMode = cleanText(req.body.assignmentMode || 'auto');
 
-    const cliente = await upsertClienteFromVenta(req.body);
+    const cliente = await upsertClienteFromVenta(req.body, null, {
+      preserveExisting: true,
+    });
 
     const ventaExistente = await prisma.venta.findUnique({
       where: getVentaPeriodoWhere(
@@ -3779,7 +3796,9 @@ app.put('/ventas/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Venta no encontrada.' });
     }
 
-    await upsertClienteFromVenta(req.body, actual.clienteId);
+    await upsertClienteFromVenta(req.body, actual.clienteId, {
+      preserveExisting: true,
+    });
 
     const baseData = buildVentaData(req.body, {
       defaultEstado: cleanText(actual.estado) === 'BAJA' ? 'BAJA' : 'PAGADO',
