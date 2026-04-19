@@ -552,48 +552,139 @@ type VentaFormStepCardProps = {
   step: string
   title: string
   description: string
+  open: boolean
+  enabled?: boolean
+  statusLabel?: string
+  onToggle: () => void
+  footer?: React.ReactNode
   children: React.ReactNode
 }
 
-function VentaFormStepCard({ step, title, description, children }: VentaFormStepCardProps) {
+function VentaFormStepCard({
+  step,
+  title,
+  description,
+  open,
+  enabled = true,
+  statusLabel,
+  onToggle,
+  footer,
+  children,
+}: VentaFormStepCardProps) {
   return (
     <section
       style={{
         border: '1px solid rgba(51,65,85,0.9)',
         borderRadius: '16px',
         background: 'rgba(2,6,23,0.32)',
-        padding: '18px',
-        display: 'grid',
-        gap: '16px',
+        overflow: 'hidden',
+        opacity: enabled ? 1 : 0.72,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!enabled}
+        style={{
+          width: '100%',
+          border: 'none',
+          background: 'transparent',
+          padding: '18px',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: '14px',
+          textAlign: 'left',
+          cursor: enabled ? 'pointer' : 'not-allowed',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '34px',
+              height: '34px',
+              padding: '0 10px',
+              borderRadius: '999px',
+              background: open ? 'rgba(59,130,246,0.22)' : 'rgba(37,99,235,0.16)',
+              color: '#93c5fd',
+              fontSize: '13px',
+              fontWeight: 800,
+              flexShrink: 0,
+            }}
+          >
+            Paso {step}
+          </span>
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
+              {statusLabel ? (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '4px 10px',
+                    borderRadius: '999px',
+                    background: open ? 'rgba(59,130,246,0.16)' : 'rgba(148,163,184,0.12)',
+                    color: open ? '#93c5fd' : '#cbd5e1',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {statusLabel}
+                </span>
+              ) : null}
+            </div>
+            <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
+          </div>
+        </div>
+
         <span
           style={{
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            minWidth: '34px',
+            minWidth: '38px',
             height: '34px',
-            padding: '0 10px',
-            borderRadius: '999px',
-            background: 'rgba(37,99,235,0.16)',
-            color: '#93c5fd',
-            fontSize: '13px',
-            fontWeight: 800,
+            borderRadius: '10px',
+            background: 'rgba(15,23,42,0.9)',
+            color: '#cbd5e1',
+            fontSize: '18px',
+            fontWeight: 700,
             flexShrink: 0,
           }}
         >
-          Paso {step}
+          {open ? '-' : '+'}
         </span>
+      </button>
 
-        <div style={{ minWidth: 0 }}>
-          <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
-          <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
+      {open ? (
+        <div
+          style={{
+            padding: '0 18px 18px',
+            display: 'grid',
+            gap: '16px',
+            borderTop: '1px solid rgba(51,65,85,0.65)',
+          }}
+        >
+          <div style={{ paddingTop: '16px' }}>{children}</div>
+          {footer ? (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
+              {footer}
+            </div>
+          ) : null}
         </div>
-      </div>
-
-      {children}
+      ) : null}
     </section>
   )
 }
@@ -732,6 +823,7 @@ function App() {
   const [clienteForm, setClienteForm] = useState(emptyClienteForm)
   const [cuentaForm, setCuentaForm] = useState(emptyCuentaForm)
   const [ventaForm, setVentaForm] = useState(emptyVentaForm)
+  const [ventaFormStep, setVentaFormStep] = useState<1 | 2 | 3 | 4>(1)
   const [telefonoPais, setTelefonoPais] = useState(defaultPhoneCountry.dialCode)
   const [ventaFechaCierreAuto, setVentaFechaCierreAuto] = useState(true)
 
@@ -1768,6 +1860,7 @@ function App() {
   function resetVentaForm() {
     setVentaForm(emptyVentaForm)
     setEditingVentaId(null)
+    setVentaFormStep(1)
     setTelefonoPais(defaultPhoneCountry.dialCode)
     setVentaFechaCierreAuto(true)
   }
@@ -2042,6 +2135,7 @@ function App() {
       assignmentMode: venta.cuentaAccesoId ? 'manual' : 'auto',
       cuentaAccesoId: venta.cuentaAccesoId ? String(venta.cuentaAccesoId) : '',
     })
+    setVentaFormStep(1)
     setVentaFechaCierreAuto(!!fechaInicio && !!fechaCierre && addMonthsToInputDate(fechaInicio, 1) === fechaCierre)
     setActiveTab('registro')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -2604,6 +2698,11 @@ function App() {
 
   const ventasFiltradas = ventas
 
+  const selectedVentaDeviceKeys = getSelectedTipos(ventaForm.tipoDispositivo)
+  const selectedVentaDevices = buildVentaDeviceList(ventaForm)
+  const ventaHasOtroSinDetalle =
+    selectedVentaDeviceKeys.includes(DISPOSITIVO_OTRO) &&
+    getCustomDeviceEntries(ventaForm.otroTipoDispositivo).length === 0
   const cantidadTiposSeleccionados = countVentaDevices(ventaForm)
   const ventaStatusSummary = getVentaStatusSummary(ventaForm)
   const ventaClientDataLocked = Boolean(matchedClienteByPhone) || editingVentaId !== null
@@ -2612,6 +2711,37 @@ function App() {
   const registroVentaDescription = editingVentaId
     ? 'Actualiza los datos de esta venta. Si necesitas corregir nombre, monto, carpeta u observación del cliente, hazlo desde la pestaña Clientes.'
     : 'Primero registra el cliente en la pestaña Clientes. Luego aquí puedes registrar su venta usando los datos ya guardados.'
+  const ventaStep1Complete = Boolean(String(ventaForm.cliente || '').trim() && buildTelefonoValue(telefonoPais, ventaForm.telefono))
+  const ventaMonto = Number(ventaForm.monto || 0)
+  const ventaDescuento = Number(ventaForm.descuento || 0)
+  const ventaStep2Complete =
+    ventaStep1Complete &&
+    Boolean(ventaForm.fechaInicio) &&
+    Boolean(ventaForm.fechaCierre) &&
+    ventaMonto > 0 &&
+    ventaDescuento >= 0 &&
+    ventaDescuento <= ventaMonto
+  const ventaStep3Complete =
+    ventaStep2Complete &&
+    selectedVentaDevices.length > 0 &&
+    !ventaHasOtroSinDetalle
+  const ventaStep4Complete =
+    ventaStep3Complete &&
+    (ventaForm.assignmentMode === 'auto' ? Boolean(selectedCuentaPreview) : Boolean(selectedCuentaPreview?.id))
+  const ventaMaxEnabledStep = ventaStep1Complete
+    ? ventaStep2Complete
+      ? ventaStep3Complete
+        ? 4
+        : 3
+      : 2
+    : 1
+
+  useEffect(() => {
+    if (ventaFormStep > ventaMaxEnabledStep) {
+      setVentaFormStep(ventaMaxEnabledStep as 1 | 2 | 3 | 4)
+    }
+  }, [ventaFormStep, ventaMaxEnabledStep])
+
   const isAdmin = currentUser?.rol === 'ADMIN'
   const selectedWhatsAppChat = useMemo(
     () => whatsAppChats.find((chat) => chat.telefono === selectedWhatsAppChatPhone) || null,
@@ -3352,23 +3482,52 @@ function App() {
                               }}
                             >
                               {[
-                                { step: '1', title: 'Cliente' },
-                                { step: '2', title: 'Cobro' },
-                                { step: '3', title: 'Dispositivos' },
-                                { step: '4', title: 'Cuenta' },
+                                { step: 1, title: 'Cliente', complete: ventaStep1Complete, enabled: true },
+                                { step: 2, title: 'Cobro', complete: ventaStep2Complete, enabled: ventaMaxEnabledStep >= 2 },
+                                { step: 3, title: 'Dispositivos', complete: ventaStep3Complete, enabled: ventaMaxEnabledStep >= 3 },
+                                { step: 4, title: 'Cuenta', complete: ventaStep4Complete, enabled: ventaMaxEnabledStep >= 4 },
                               ].map((item) => (
-                                <div
+                                <button
                                   key={item.step}
+                                  type="button"
+                                  onClick={() => item.enabled && setVentaFormStep(item.step as 1 | 2 | 3 | 4)}
+                                  disabled={!item.enabled}
                                   style={{
+                                    textAlign: 'left',
                                     border: '1px solid rgba(51,65,85,0.9)',
                                     borderRadius: '12px',
-                                    background: 'rgba(2,6,23,0.22)',
+                                    background:
+                                      ventaFormStep === item.step
+                                        ? 'rgba(37,99,235,0.16)'
+                                        : 'rgba(2,6,23,0.22)',
                                     padding: '12px 14px',
+                                    cursor: item.enabled ? 'pointer' : 'not-allowed',
+                                    opacity: item.enabled ? 1 : 0.65,
+                                    color: '#f8fafc',
                                   }}
                                 >
-                                  <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800 }}>Paso {item.step}</div>
-                                  <div style={{ color: '#f8fafc', fontWeight: 700, marginTop: '4px' }}>{item.title}</div>
-                                </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
+                                    <div>
+                                      <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800 }}>Paso {item.step}</div>
+                                      <div style={{ color: '#f8fafc', fontWeight: 700, marginTop: '4px' }}>{item.title}</div>
+                                    </div>
+                                    <span
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        padding: '4px 8px',
+                                        borderRadius: '999px',
+                                        background: item.complete ? 'rgba(34,197,94,0.16)' : 'rgba(148,163,184,0.12)',
+                                        color: item.complete ? '#86efac' : '#cbd5e1',
+                                        fontSize: '11px',
+                                        fontWeight: 700,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {item.complete ? 'Listo' : ventaFormStep === item.step ? 'Abierto' : 'Pendiente'}
+                                    </span>
+                                  </div>
+                                </button>
                               ))}
                             </div>
 
@@ -3376,6 +3535,29 @@ function App() {
                               step="1"
                               title="Cliente y contacto"
                               description="Primero identifica al cliente. Si el teléfono ya existe, el sistema completa los datos conocidos."
+                              open={ventaFormStep === 1}
+                              enabled
+                              statusLabel={ventaStep1Complete ? 'Listo para continuar' : 'Completa este paso'}
+                              onToggle={() => setVentaFormStep(1)}
+                              footer={
+                                <>
+                                  <span style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
+                                    Cuando termines este paso, se abrirá el bloque de cobro.
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setVentaFormStep(2)}
+                                    disabled={!ventaStep1Complete}
+                                    style={{
+                                      ...buttonPrimary,
+                                      opacity: ventaStep1Complete ? 1 : 0.6,
+                                      cursor: ventaStep1Complete ? 'pointer' : 'not-allowed',
+                                    }}
+                                  >
+                                    Continuar a Cobro
+                                  </button>
+                                </>
+                              }
                             >
                               <div
                                 style={{
@@ -3469,6 +3651,37 @@ function App() {
                               step="2"
                               title="Periodo y cobro"
                               description="Luego define el periodo, el monto y si el pago de este mes ya fue recibido o debe quedar pendiente."
+                              open={ventaFormStep === 2}
+                              enabled={ventaMaxEnabledStep >= 2}
+                              statusLabel={ventaStep2Complete ? 'Listo para continuar' : 'Pendiente'}
+                              onToggle={() => {
+                                if (ventaMaxEnabledStep >= 2) setVentaFormStep(2)
+                              }}
+                              footer={
+                                <>
+                                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setVentaFormStep(1)}
+                                      style={buttonSecondary}
+                                    >
+                                      Volver a Cliente
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setVentaFormStep(3)}
+                                    disabled={!ventaStep2Complete}
+                                    style={{
+                                      ...buttonPrimary,
+                                      opacity: ventaStep2Complete ? 1 : 0.6,
+                                      cursor: ventaStep2Complete ? 'pointer' : 'not-allowed',
+                                    }}
+                                  >
+                                    Continuar a Dispositivos
+                                  </button>
+                                </>
+                              }
                             >
                               <div
                                 style={{
@@ -3613,6 +3826,37 @@ function App() {
                               step="3"
                               title="Dispositivos y datos extra"
                               description="Marca los equipos incluidos, revisa la cantidad total y completa carpeta u observaciones si hace falta."
+                              open={ventaFormStep === 3}
+                              enabled={ventaMaxEnabledStep >= 3}
+                              statusLabel={ventaStep3Complete ? 'Listo para continuar' : 'Pendiente'}
+                              onToggle={() => {
+                                if (ventaMaxEnabledStep >= 3) setVentaFormStep(3)
+                              }}
+                              footer={
+                                <>
+                                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setVentaFormStep(2)}
+                                      style={buttonSecondary}
+                                    >
+                                      Volver a Cobro
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setVentaFormStep(4)}
+                                    disabled={!ventaStep3Complete}
+                                    style={{
+                                      ...buttonPrimary,
+                                      opacity: ventaStep3Complete ? 1 : 0.6,
+                                      cursor: ventaStep3Complete ? 'pointer' : 'not-allowed',
+                                    }}
+                                  >
+                                    Continuar a Cuenta
+                                  </button>
+                                </>
+                              }
                             >
                               <div
                                 style={{
@@ -3755,6 +3999,23 @@ function App() {
                               step="4"
                               title="Asignación de cuenta"
                               description="Por último decide si el sistema elige la mejor cuenta disponible o si quieres asignarla manualmente."
+                              open={ventaFormStep === 4}
+                              enabled={ventaMaxEnabledStep >= 4}
+                              statusLabel={ventaStep4Complete ? 'Listo para guardar' : 'Revisa la cuenta'}
+                              onToggle={() => {
+                                if (ventaMaxEnabledStep >= 4) setVentaFormStep(4)
+                              }}
+                              footer={
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setVentaFormStep(3)}
+                                    style={buttonSecondary}
+                                  >
+                                    Volver a Dispositivos
+                                  </button>
+                                </div>
+                              }
                             >
                               <div
                                 style={{
@@ -3898,13 +4159,27 @@ function App() {
                           </div>
 
                           <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                            <button type="submit" style={buttonPrimary}>
+                            <button
+                              type="submit"
+                              disabled={!ventaStep4Complete}
+                              style={{
+                                ...buttonPrimary,
+                                opacity: ventaStep4Complete ? 1 : 0.6,
+                                cursor: ventaStep4Complete ? 'pointer' : 'not-allowed',
+                              }}
+                            >
                               {editingVentaId ? 'Actualizar' : 'Guardar'}
                             </button>
 
                             <button type="button" onClick={resetVentaForm} style={buttonSecondary}>
                               Limpiar
                             </button>
+
+                            {!ventaStep4Complete && (
+                              <div style={{ color: '#94a3b8', fontSize: '12px', alignSelf: 'center' }}>
+                                Completa los pasos y llega hasta Cuenta para habilitar el guardado.
+                              </div>
+                            )}
                           </div>
                         </form>
                       </div>
