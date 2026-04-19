@@ -2,6 +2,7 @@
 import {
   bootstrapAuth,
   changePassword,
+  createSystemBackup,
   clearStoredAuthToken,
   clearMaintenanceHistory,
   deleteCliente,
@@ -20,6 +21,7 @@ import {
   getMe,
   getPagos,
   getPagosResumen,
+  getSystemBackups,
   getUsers,
   getVentas,
   getWhatsAppConfig,
@@ -31,6 +33,7 @@ import {
   logout,
   logoutAll,
   pagarVenta,
+  restoreSystemBackup,
   saveCliente,
   saveCuenta,
   saveUser,
@@ -55,6 +58,8 @@ import type {
   HistorialBaja,
   Pago,
   PagoResumenResponse,
+  SystemBackupListResponse,
+  SystemBackupSummary,
   UsuarioSistema,
   Venta,
   VentaPayload,
@@ -87,7 +92,6 @@ import {
   formatDateDisplay,
   formatMonthYearLabel,
   getDaysOverdue,
-  normalizePhoneForLookup,
   normalizeText,
   toInputDate,
 } from './utils/ui'
@@ -136,6 +140,7 @@ type CuentaFormState = {
 }
 
 type VentaFormState = {
+  clienteId: string
   cliente: string
   telefono: string
   carpeta: string
@@ -152,6 +157,13 @@ type VentaFormState = {
   observacion: string
   assignmentMode: 'auto' | 'manual'
   cuentaAccesoId: string
+}
+
+type VentaStepErrors = {
+  step1: string[]
+  step2: string[]
+  step3: string[]
+  step4: string[]
 }
 
 type VentasMetaState = Omit<VentasResponse, 'items'>
@@ -219,6 +231,7 @@ const emptyCuentaForm: CuentaFormState = {
 }
 
 const emptyVentaForm: VentaFormState = {
+  clienteId: '',
   cliente: '',
   telefono: '',
   carpeta: '',
@@ -882,6 +895,7 @@ function App() {
   const [cuentaForm, setCuentaForm] = useState(emptyCuentaForm)
   const [ventaForm, setVentaForm] = useState(emptyVentaForm)
   const [ventaFormStep, setVentaFormStep] = useState<1 | 2 | 3 | 4>(1)
+  const [ventaValidationStep, setVentaValidationStep] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [telefonoPais, setTelefonoPais] = useState(defaultPhoneCountry.dialCode)
   const [ventaFechaCierreAuto, setVentaFechaCierreAuto] = useState(true)
 
@@ -923,6 +937,7 @@ function App() {
   const [searchCliente, setSearchCliente] = useState('')
   const [searchCuenta, setSearchCuenta] = useState('')
   const [searchVenta, setSearchVenta] = useState('')
+  const [searchVentaCliente, setSearchVentaCliente] = useState('')
   const [filterCorreoVenta, setFilterCorreoVenta] = useState('')
   const [filterEstadoVenta, setFilterEstadoVenta] = useState('')
   const [filterMesVenta, setFilterMesVenta] = useState('')
@@ -933,6 +948,17 @@ function App() {
   const [ventasPage, setVentasPage] = useState(1)
   const [ventasPageSize, setVentasPageSize] = useState(20)
   const [lastWhatsAppTest, setLastWhatsAppTest] = useState<WhatsAppTestResponse | null>(null)
+  const [backupInfo, setBackupInfo] = useState<SystemBackupListResponse>({
+    items: [],
+    autoEnabled: true,
+    targetHour: 3,
+    keepLimit: 7,
+    latestKey: null,
+    lastRunDate: null,
+    lastRestoredKey: null,
+    lastRestoredAt: null,
+  })
+  const [loadingBackups, setLoadingBackups] = useState(false)
   const dashboardRangeRef = React.useRef<DashboardResumenQuery>({})
 
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
@@ -969,17 +995,11 @@ function App() {
     dashboardRangeRef.current = buildDashboardParams(dashboardDateFrom, dashboardDateTo)
   }, [dashboardDateFrom, dashboardDateTo])
 
-  const matchedClienteByPhone = useMemo(() => {
-    const fullPhone = buildTelefonoValue(telefonoPais, ventaForm.telefono)
-    const normalizedPhone =
-      normalizePhoneForLookup(fullPhone) || normalizePhoneForLookup(ventaForm.telefono)
-
-    if (!normalizedPhone) return null
-
-    return (
-      clientes.find((cliente) => normalizePhoneForLookup(cliente.telefono) === normalizedPhone) || null
-    )
-  }, [clientes, telefonoPais, ventaForm.telefono])
+  const selectedVentaCliente = useMemo(() => {
+    const clienteId = Number(ventaForm.clienteId || 0)
+    if (!clienteId) return null
+    return clientes.find((cliente) => cliente.id === clienteId) || null
+  }, [clientes, ventaForm.clienteId])
 
   async function cargarClientes() {
     try {
@@ -1224,6 +1244,18 @@ function App() {
     }
   }
 
+  async function cargarBackups() {
+    try {
+      setLoadingBackups(true)
+      const data = await getSystemBackups()
+      setBackupInfo(data)
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error cargando los respaldos del sistema.'))
+    } finally {
+      setLoadingBackups(false)
+    }
+  }
+
   function applyAuthPayload(payload: AuthResponse) {
     setStoredAuthToken(payload.token)
     setCurrentUser(payload.user)
@@ -1260,6 +1292,16 @@ function App() {
       setWhatsAppReplyText('')
       setDashboardResumen(null)
       setLastWhatsAppTest(null)
+      setBackupInfo({
+        items: [],
+        autoEnabled: true,
+        targetHour: 3,
+        keepLimit: 7,
+        latestKey: null,
+        lastRunDate: null,
+        lastRestoredKey: null,
+        lastRestoredAt: null,
+      })
       setPasswordForm(emptyPasswordForm)
       if (showMessage) {
         setSuccess('Sesión cerrada correctamente.')
@@ -1386,19 +1428,26 @@ function App() {
   }, [authCheckNonce])
 
   useEffect(() => {
-    if (!matchedClienteByPhone || editingVentaId) return
+    if (!selectedVentaCliente) return
 
+    const phone = splitTelefonoFormValue(selectedVentaCliente.telefono || '')
+
+    setTelefonoPais(phone.dialCode)
     setVentaForm((prev) => {
       const next = {
         ...prev,
-        cliente: matchedClienteByPhone.nombre || '',
-        monto: String(matchedClienteByPhone.monto ?? ''),
-        carpeta: matchedClienteByPhone.carpeta || '',
-        observacion: matchedClienteByPhone.observacion || '',
+        clienteId: String(selectedVentaCliente.id),
+        cliente: selectedVentaCliente.nombre || '',
+        telefono: phone.local || '',
+        monto: String(selectedVentaCliente.monto ?? ''),
+        carpeta: selectedVentaCliente.carpeta || '',
+        observacion: selectedVentaCliente.observacion || '',
       }
 
       if (
+        next.clienteId === prev.clienteId &&
         next.cliente === prev.cliente &&
+        next.telefono === prev.telefono &&
         next.monto === prev.monto &&
         next.carpeta === prev.carpeta &&
         next.observacion === prev.observacion
@@ -1408,7 +1457,7 @@ function App() {
 
       return next
     })
-  }, [editingVentaId, matchedClienteByPhone])
+  }, [selectedVentaCliente])
 
   useEffect(() => {
     if (!currentUser || activeTab !== 'chats') return
@@ -1479,7 +1528,7 @@ function App() {
         ] as const
 
         const adminTasks = authUser.rol === 'ADMIN'
-          ? [getWhatsAppConfig(), getUsers()] as const
+          ? [getWhatsAppConfig(), getUsers(), getSystemBackups()] as const
           : [] as const
 
         const protectedData = await Promise.all([...tasks, ...adminTasks])
@@ -1501,10 +1550,22 @@ function App() {
         if (authUser.rol === 'ADMIN') {
           const configData = protectedData[9] as WhatsAppConfig
           const usersData = protectedData[10] as UsuarioSistema[]
+          const backupsData = protectedData[11] as SystemBackupListResponse
           setWhatsAppConfig(configData)
           setUsers(usersData)
+          setBackupInfo(backupsData)
         } else {
           setUsers([])
+          setBackupInfo({
+            items: [],
+            autoEnabled: true,
+            targetHour: 3,
+            keepLimit: 7,
+            latestKey: null,
+            lastRunDate: null,
+            lastRestoredKey: null,
+            lastRestoredAt: null,
+          })
         }
       } catch (error) {
         if (!cancelled) {
@@ -1905,6 +1966,42 @@ function App() {
     setVentaForm((prev) => ({ ...prev, [name]: value }))
   }
 
+  function handleVentaClienteSelect(clienteIdValue: string) {
+    if (!clienteIdValue) {
+      setVentaForm((prev) => ({
+        ...emptyVentaForm,
+        fechaInicio: prev.fechaInicio,
+        fechaCierre: prev.fechaCierre,
+        fechaPago: prev.fechaPago,
+        pagoRegistrado: prev.pagoRegistrado,
+        descuento: prev.descuento,
+        estado: prev.estado,
+        tipoDispositivo: prev.tipoDispositivo,
+        otroTipoDispositivo: prev.otroTipoDispositivo,
+        cantidadDispositivos: prev.cantidadDispositivos,
+        assignmentMode: prev.assignmentMode,
+        cuentaAccesoId: prev.cuentaAccesoId,
+      }))
+      setTelefonoPais(defaultPhoneCountry.dialCode)
+      return
+    }
+
+    const cliente = clientes.find((item) => String(item.id) === String(clienteIdValue))
+    if (!cliente) return
+
+    const phone = splitTelefonoFormValue(cliente.telefono || '')
+    setTelefonoPais(phone.dialCode)
+    setVentaForm((prev) => ({
+      ...prev,
+      clienteId: String(cliente.id),
+      cliente: cliente.nombre || '',
+      telefono: phone.local || '',
+      monto: String(cliente.monto ?? ''),
+      carpeta: cliente.carpeta || '',
+      observacion: cliente.observacion || '',
+    }))
+  }
+
   function resetClienteForm() {
     setClienteForm(emptyClienteForm)
     setEditingClienteId(null)
@@ -1919,8 +2016,10 @@ function App() {
     setVentaForm(emptyVentaForm)
     setEditingVentaId(null)
     setVentaFormStep(1)
+    setVentaValidationStep(0)
     setTelefonoPais(defaultPhoneCountry.dialCode)
     setVentaFechaCierreAuto(true)
+    setSearchVentaCliente('')
   }
 
   async function submitGuardarCliente() {
@@ -2037,6 +2136,10 @@ function App() {
     const selectedDeviceKeys = getSelectedTipos(ventaForm.tipoDispositivo)
     const selectedDevices = buildVentaDeviceList(ventaForm)
 
+    if (!ventaForm.clienteId) {
+      throw new Error('Selecciona un cliente registrado antes de guardar la venta.')
+    }
+
     if (ventaForm.assignmentMode === 'manual') {
       if (!ventaForm.cuentaAccesoId) {
         throw new Error('Selecciona una cuenta manual.')
@@ -2062,6 +2165,7 @@ function App() {
 
     const payload: VentaPayload = {
       ...ventaForm,
+      clienteId: Number(ventaForm.clienteId),
       telefono: telefonoCompleto,
       fechaPago:
         ventaForm.pagoRegistrado === 'SI' ? ventaForm.fechaPago || ventaForm.fechaInicio : '',
@@ -2105,17 +2209,31 @@ function App() {
     e.preventDefault()
     limpiarMensajes()
 
-    const selectedDevices = buildVentaDeviceList(ventaForm)
+    if (!ventaStep1Complete) {
+      setVentaFormStep(1)
+      setVentaValidationStep(1)
+      setError('Revisa el paso Cliente antes de guardar.')
+      return
+    }
 
-    if (
-      !ventaForm.cliente.trim() ||
-      !ventaForm.telefono.trim() ||
-      !ventaForm.fechaInicio ||
-      !ventaForm.fechaCierre ||
-      !ventaForm.monto ||
-      !selectedDevices.length
-    ) {
-      setError('Completa los campos obligatorios de la venta.')
+    if (!ventaStep2Complete) {
+      setVentaFormStep(2)
+      setVentaValidationStep(2)
+      setError('Revisa el paso Cobro antes de guardar.')
+      return
+    }
+
+    if (!ventaStep3Complete) {
+      setVentaFormStep(3)
+      setVentaValidationStep(3)
+      setError('Revisa el paso Dispositivos antes de guardar.')
+      return
+    }
+
+    if (!ventaStep4Complete) {
+      setVentaFormStep(4)
+      setVentaValidationStep(4)
+      setError('Revisa la cuenta asignada antes de guardar.')
       return
     }
 
@@ -2176,6 +2294,7 @@ function App() {
     const fechaInicio = toInputDate(venta.fechaInicio)
     const fechaCierre = toInputDate(venta.fechaCierre)
     setVentaForm({
+      clienteId: String(venta.clienteId || ''),
       cliente: venta.cliente?.nombre || '',
       telefono: phone.local || '',
       carpeta: venta.cliente?.carpeta || '',
@@ -2194,7 +2313,9 @@ function App() {
       cuentaAccesoId: venta.cuentaAccesoId ? String(venta.cuentaAccesoId) : '',
     })
     setVentaFormStep(1)
+    setVentaValidationStep(0)
     setVentaFechaCierreAuto(!!fechaInicio && !!fechaCierre && addMonthsToInputDate(fechaInicio, 1) === fechaCierre)
+    setSearchVentaCliente('')
     setActiveTab('registro')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -2512,6 +2633,64 @@ function App() {
     })
   }
 
+  function crearRespaldoManual() {
+    limpiarMensajes()
+
+    openConfirmModal({
+      title: 'Crear respaldo',
+      message: 'Se generará un respaldo lógico completo del sistema y quedará listo para restaurarse después.',
+      type: 'success',
+      confirmText: 'Crear respaldo',
+      onConfirm: async () => {
+        try {
+          const result = await createSystemBackup()
+          setSuccess(`Respaldo creado correctamente: ${result.backup.key}.`)
+          await cargarBackups()
+        } catch (error) {
+          setError(getErrorMessage(error, 'Error creando el respaldo.'))
+        }
+      },
+    })
+  }
+
+  function restaurarRespaldo(backup: SystemBackupSummary) {
+    limpiarMensajes()
+
+    openConfirmModal({
+      title: 'Restaurar respaldo',
+      message: `Se reemplazarán los datos actuales por el respaldo ${backup.key}. Esta acción no se puede deshacer.`,
+      type: 'danger',
+      confirmText: 'Restaurar',
+      onConfirm: async () => {
+        try {
+          const result = await restoreSystemBackup(backup.key)
+          if (!result.verification.ok) {
+            throw new Error('La restauración terminó, pero la verificación final no coincidió.')
+          }
+
+          setSuccess(`Sistema restaurado correctamente desde ${backup.key}. Verificación final: OK.`)
+          resetClienteForm()
+          resetCuentaForm()
+          resetVentaForm()
+          await Promise.all([
+            cargarClientes(),
+            cargarVentas(),
+            cargarCuentas(),
+            cargarHistorialBajas(),
+            cargarWhatsAppLogs(),
+            cargarPagos(),
+            cargarPagosResumen(),
+            cargarActividad(),
+            cargarDashboard(),
+            cargarBackups(),
+          ])
+        } catch (error) {
+          setError(getErrorMessage(error, 'Error restaurando el respaldo.'))
+        }
+      },
+    })
+  }
+
   function editarUsuario(usuario: UsuarioSistema) {
     limpiarMensajes()
     setEditingUserId(usuario.id)
@@ -2741,6 +2920,21 @@ function App() {
       .sort((a, b) => a.id - b.id)
   }, [clientes, searchCliente])
 
+  const ventaClientesDisponibles = useMemo(() => {
+    const q = normalizeText(searchVentaCliente)
+
+    return [...clientes]
+      .filter((cliente) => {
+        if (!q) return true
+
+        const blob = normalizeText(
+          `${cliente.nombre} ${cliente.telefono} ${cliente.carpeta || ''} ${cliente.observacion || ''}`
+        )
+        return blob.includes(q)
+      })
+      .sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [clientes, searchVentaCliente])
+
   const cuentasFiltradas = useMemo(() => {
     const q = normalizeText(searchCuenta)
     return cuentas
@@ -2758,27 +2952,29 @@ function App() {
 
   const selectedVentaDeviceKeys = getSelectedTipos(ventaForm.tipoDispositivo)
   const selectedVentaDevices = buildVentaDeviceList(ventaForm)
+  const ventaPhoneDisplay = buildTelefonoValue(telefonoPais, ventaForm.telefono)
   const ventaHasOtroSinDetalle =
     selectedVentaDeviceKeys.includes(DISPOSITIVO_OTRO) &&
     getCustomDeviceEntries(ventaForm.otroTipoDispositivo).length === 0
   const cantidadTiposSeleccionados = countVentaDevices(ventaForm)
   const ventaStatusSummary = getVentaStatusSummary(ventaForm)
-  const ventaClientDataLocked = Boolean(matchedClienteByPhone) || editingVentaId !== null
-  const ventaPhoneLocked = editingVentaId !== null
+  const ventaClientDataLocked = Boolean(selectedVentaCliente) || editingVentaId !== null
   const registroVentaTitle = editingVentaId ? 'Editar venta' : 'Registrar venta'
   const registroVentaDescription = editingVentaId
     ? 'Actualiza los datos de esta venta. Si necesitas corregir nombre, monto, carpeta u observación del cliente, hazlo desde la pestaña Clientes.'
-    : 'Primero registra el cliente en la pestaña Clientes. Luego aquí puedes registrar su venta usando los datos ya guardados.'
-  const ventaStep1Complete = Boolean(String(ventaForm.cliente || '').trim() && buildTelefonoValue(telefonoPais, ventaForm.telefono))
+    : 'Primero registra el cliente en la pestaña Clientes. Luego aquí solo lo eliges para registrar su venta usando los datos ya guardados.'
+  const ventaStep1Complete = Boolean(String(ventaForm.clienteId || '').trim() && String(ventaForm.cliente || '').trim() && ventaPhoneDisplay)
   const ventaMonto = Number(ventaForm.monto || 0)
   const ventaDescuento = Number(ventaForm.descuento || 0)
+  const ventaResumenNeto = Math.max(0, ventaMonto - ventaDescuento)
   const ventaStep2Complete =
     ventaStep1Complete &&
     Boolean(ventaForm.fechaInicio) &&
     Boolean(ventaForm.fechaCierre) &&
     ventaMonto > 0 &&
     ventaDescuento >= 0 &&
-    ventaDescuento <= ventaMonto
+    ventaDescuento <= ventaMonto &&
+    (ventaForm.pagoRegistrado === 'NO' || Boolean(ventaForm.fechaPago || ventaForm.fechaInicio))
   const ventaStep3Complete =
     ventaStep2Complete &&
     selectedVentaDevices.length > 0 &&
@@ -2793,6 +2989,42 @@ function App() {
         : 3
       : 2
     : 1
+  const ventaStepErrors: VentaStepErrors = {
+    step1: [
+      !clientes.length ? 'Primero registra al menos un cliente en la pestaña Clientes.' : '',
+      !ventaForm.clienteId ? 'Elige un cliente registrado para continuar.' : '',
+    ].filter(Boolean),
+    step2: [
+      !ventaForm.fechaInicio ? 'La fecha de inicio es obligatoria.' : '',
+      !ventaForm.fechaCierre ? 'La fecha de cierre es obligatoria.' : '',
+      ventaMonto <= 0 ? 'El monto debe ser mayor a 0.' : '',
+      ventaDescuento < 0 ? 'El descuento no puede ser negativo.' : '',
+      ventaDescuento > ventaMonto ? 'El descuento no puede ser mayor que el monto.' : '',
+      ventaForm.pagoRegistrado === 'SI' && !String(ventaForm.fechaPago || ventaForm.fechaInicio).trim()
+        ? 'Si el pago ya fue recibido, debe existir una fecha de pago.'
+        : '',
+    ].filter(Boolean),
+    step3: [
+      !selectedVentaDevices.length ? 'Selecciona al menos un dispositivo.' : '',
+      ventaHasOtroSinDetalle ? 'Si marcas "Otro", especifica cuál es el dispositivo.' : '',
+    ].filter(Boolean),
+    step4: [
+      ventaForm.assignmentMode === 'manual' && !ventaForm.cuentaAccesoId
+        ? 'Selecciona una cuenta manual para cerrar el registro.'
+        : '',
+      ventaForm.assignmentMode === 'auto' && !selectedCuentaPreview
+        ? 'No hay una cuenta activa con espacio disponible en este momento.'
+        : '',
+    ].filter(Boolean),
+  }
+  const currentVentaStepErrors =
+    ventaFormStep === 1
+      ? ventaStepErrors.step1
+      : ventaFormStep === 2
+        ? ventaStepErrors.step2
+        : ventaFormStep === 3
+          ? ventaStepErrors.step3
+          : ventaStepErrors.step4
 
   useEffect(() => {
     if (ventaFormStep > ventaMaxEnabledStep) {
@@ -3589,11 +3821,32 @@ function App() {
                               </span>
                             </div>
 
+                            {ventaValidationStep >= ventaFormStep && currentVentaStepErrors.length > 0 && (
+                              <div
+                                style={{
+                                  padding: '14px 16px',
+                                  borderRadius: '14px',
+                                  border: '1px solid rgba(248,113,113,0.3)',
+                                  background: 'rgba(69,10,10,0.22)',
+                                  color: '#fecaca',
+                                  fontSize: '13px',
+                                  lineHeight: 1.65,
+                                }}
+                              >
+                                <div style={{ fontWeight: 800, marginBottom: '6px' }}>
+                                  Revisa este paso antes de continuar:
+                                </div>
+                                {currentVentaStepErrors.map((message) => (
+                                  <div key={message}>• {message}</div>
+                                ))}
+                              </div>
+                            )}
+
                             {ventaFormStep === 1 && (
                             <VentaFormStepCard
                               step="1"
                               title="Cliente y contacto"
-                              description="Primero identifica al cliente. Si el teléfono ya existe, el sistema completa los datos conocidos."
+                              description="Primero elige un cliente ya registrado. Sus datos maestros se usan aquí para evitar duplicados y confusiones."
                               wizardMode
                               open
                               enabled
@@ -3606,12 +3859,14 @@ function App() {
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => setVentaFormStep(2)}
-                                    disabled={!ventaStep1Complete}
+                                    onClick={() => {
+                                      setVentaValidationStep(1)
+                                      if (!ventaStep1Complete) return
+                                      setVentaFormStep(2)
+                                    }}
                                     style={{
                                       ...buttonPrimary,
-                                      opacity: ventaStep1Complete ? 1 : 0.6,
-                                      cursor: ventaStep1Complete ? 'pointer' : 'not-allowed',
+                                      opacity: ventaStep1Complete ? 1 : 0.82,
                                     }}
                                   >
                                     Continuar a Cobro
@@ -3622,88 +3877,137 @@ function App() {
                               <div
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
-                                  columnGap: '18px',
-                                  rowGap: '18px',
-                                  alignItems: 'start',
+                                  gap: '16px',
                                 }}
                               >
-                                <div>
-                                  <label style={formLabelStyle}>Cliente *</label>
-                                  <input
-                                    name="cliente"
-                                    placeholder="Nombre del cliente"
-                                    value={ventaForm.cliente || ''}
-                                    onChange={handleVentaChange}
-                                    readOnly={ventaClientDataLocked}
-                                    style={{
-                                      ...inputStyle,
-                                      background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
-                                      cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
-                                      opacity: ventaClientDataLocked ? 0.88 : 1,
-                                    }}
-                                  />
-                                  {ventaClientDataLocked && (
-                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
-                                      {editingVentaId
-                                        ? 'El nombre del cliente se corrige desde la pestaña Clientes.'
-                                        : 'Este dato se está usando desde el cliente ya registrado.'}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <label style={formLabelStyle}>Teléfono *</label>
+                                {!editingVentaId && (
                                   <div
                                     style={{
                                       display: 'grid',
-                                      gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : '150px minmax(0, 1fr)',
-                                      gap: '12px',
+                                      gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 0.85fr) minmax(0, 1.15fr)',
+                                      columnGap: '18px',
+                                      rowGap: '18px',
+                                      alignItems: 'start',
                                     }}
                                   >
-                                    <select
-                                      value={telefonoPais}
-                                      onChange={(e) => setTelefonoPais(e.target.value)}
-                                      disabled={ventaPhoneLocked}
+                                    <div>
+                                      <label style={formLabelStyle}>Buscar cliente</label>
+                                      <input
+                                        value={searchVentaCliente}
+                                        onChange={(e) => setSearchVentaCliente(e.target.value)}
+                                        placeholder="Busca por nombre o teléfono"
+                                        style={inputStyle}
+                                      />
+                                      <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                        Si aún no existe, créalo primero en la pestaña Clientes y luego vuelve aquí.
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label style={formLabelStyle}>Cliente registrado *</label>
+                                      <select
+                                        value={ventaForm.clienteId}
+                                        onChange={(e) => handleVentaClienteSelect(e.target.value)}
+                                        style={{
+                                          ...inputStyle,
+                                          border:
+                                            ventaValidationStep >= 1 && !ventaForm.clienteId
+                                              ? '1px solid rgba(248,113,113,0.8)'
+                                              : inputStyle.border,
+                                        }}
+                                      >
+                                        <option value="">
+                                          {ventaClientesDisponibles.length
+                                            ? 'Selecciona un cliente'
+                                            : 'No hay clientes para mostrar'}
+                                        </option>
+                                        {ventaClientesDisponibles.map((cliente) => (
+                                          <option key={cliente.id} value={cliente.id}>
+                                            {`${cliente.nombre} · ${cliente.telefono}`}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {ventaValidationStep >= 1 && !ventaForm.clienteId && (
+                                        <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                          Elige un cliente registrado para continuar.
+                                        </div>
+                                      )}
+                                      {!clientes.length && (
+                                        <div style={{ marginTop: '10px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveTab('clientes')
+                                              window.scrollTo({ top: 0, behavior: 'smooth' })
+                                            }}
+                                            style={buttonSecondary}
+                                          >
+                                            Ir a Clientes
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {ventaForm.clienteId && (
+                                  <div
+                                    style={{
+                                      borderRadius: '16px',
+                                      border: '1px solid rgba(96,165,250,0.18)',
+                                      background: 'rgba(15,23,42,0.6)',
+                                      padding: '16px',
+                                      display: 'grid',
+                                      gap: '14px',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                                      <div>
+                                        <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800, textTransform: 'uppercase' }}>
+                                          Cliente seleccionado
+                                        </div>
+                                        <div style={{ color: '#f8fafc', fontSize: '18px', fontWeight: 800, marginTop: '4px' }}>
+                                          {ventaForm.cliente || 'Sin cliente'}
+                                        </div>
+                                      </div>
+
+                                      {editingVentaId ? (
+                                        <span style={{ ...badgeActive, alignSelf: 'flex-start' }}>Venta en edición</span>
+                                      ) : null}
+                                    </div>
+
+                                    <div
                                       style={{
-                                        ...inputStyle,
-                                        opacity: ventaPhoneLocked ? 0.7 : 1,
-                                        cursor: ventaPhoneLocked ? 'not-allowed' : 'pointer',
+                                        display: 'grid',
+                                        gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(4, minmax(0, 1fr))',
+                                        gap: '12px',
                                       }}
                                     >
-                                      {PHONE_COUNTRIES.map((country) => (
-                                        <option key={country.dialCode} value={country.dialCode}>
-                                          {country.label}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      <div>
+                                        <div style={formLabelStyle}>Teléfono</div>
+                                        <div style={{ ...inputStyle, color: '#e2e8f0' }}>{ventaPhoneDisplay || '-'}</div>
+                                      </div>
+                                      <div>
+                                        <div style={formLabelStyle}>Monto fijo</div>
+                                        <div style={{ ...inputStyle, color: '#e2e8f0' }}>{formatCurrencyPen(Number(ventaForm.monto || 0))}</div>
+                                      </div>
+                                      <div>
+                                        <div style={formLabelStyle}>Carpeta</div>
+                                        <div style={{ ...inputStyle, color: '#e2e8f0' }}>{ventaForm.carpeta || '-'}</div>
+                                      </div>
+                                      <div>
+                                        <div style={formLabelStyle}>Observación</div>
+                                        <div style={{ ...inputStyle, color: '#e2e8f0' }}>{ventaForm.observacion || 'Sin observación'}</div>
+                                      </div>
+                                    </div>
 
-                                    <input
-                                      name="telefono"
-                                      placeholder="Ej: 950000000"
-                                      value={ventaForm.telefono}
-                                      onChange={handleVentaChange}
-                                      readOnly={ventaPhoneLocked}
-                                      style={{
-                                        ...inputStyle,
-                                        background: ventaPhoneLocked ? '#0b1730' : inputStyle.background,
-                                        cursor: ventaPhoneLocked ? 'not-allowed' : 'text',
-                                        opacity: ventaPhoneLocked ? 0.88 : 1,
-                                      }}
-                                    />
+                                    <div style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.6 }}>
+                                      {editingVentaId
+                                        ? 'El cliente de esta venta se conserva. Si necesitas corregir sus datos maestros, edítalos desde Clientes.'
+                                        : 'Estos datos vienen de Clientes. Si algo está mal, corrígelo allí para no duplicar información.'}
+                                    </div>
                                   </div>
-                                  {matchedClienteByPhone && (
-                                    <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px', lineHeight: 1.55 }}>
-                                      Cliente encontrado: se cargaron automáticamente nombre, monto, carpeta y observación de{' '}
-                                      <b>{matchedClienteByPhone.nombre}</b>. Si necesitas corregir esos datos, edítalos en la pestaña Clientes.
-                                    </div>
-                                  )}
-                                  {editingVentaId && (
-                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
-                                      Al editar una venta, el cliente y su teléfono se conservan. Si necesitas cambiar esos datos, hazlo desde Clientes.
-                                    </div>
-                                  )}
-                                </div>
+                                )}
                               </div>
                             </VentaFormStepCard>
                             )}
@@ -3731,12 +4035,14 @@ function App() {
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => setVentaFormStep(3)}
-                                    disabled={!ventaStep2Complete}
+                                    onClick={() => {
+                                      setVentaValidationStep(2)
+                                      if (!ventaStep2Complete) return
+                                      setVentaFormStep(3)
+                                    }}
                                     style={{
                                       ...buttonPrimary,
-                                      opacity: ventaStep2Complete ? 1 : 0.6,
-                                      cursor: ventaStep2Complete ? 'pointer' : 'not-allowed',
+                                      opacity: ventaStep2Complete ? 1 : 0.82,
                                     }}
                                   >
                                     Continuar a Dispositivos
@@ -3753,6 +4059,24 @@ function App() {
                                   alignItems: 'start',
                                 }}
                               >
+                                <div
+                                  style={{
+                                    gridColumn: '1 / -1',
+                                    padding: '14px 16px',
+                                    borderRadius: '14px',
+                                    border: '1px solid rgba(96,165,250,0.16)',
+                                    background: 'rgba(15,23,42,0.55)',
+                                    color: '#cbd5e1',
+                                    lineHeight: 1.65,
+                                  }}
+                                >
+                                  Cliente: <b style={{ color: '#f8fafc' }}>{ventaForm.cliente || 'Sin seleccionar'}</b>
+                                  <br />
+                                  Monto fijo base: <b style={{ color: '#f8fafc' }}>{formatCurrencyPen(ventaMonto)}</b>
+                                  <br />
+                                  Neto del registro: <b style={{ color: '#f8fafc' }}>{formatCurrencyPen(ventaResumenNeto)}</b>
+                                </div>
+
                                 <div>
                                   <label style={formLabelStyle}>Fecha de inicio *</label>
                                   <input
@@ -3760,11 +4084,22 @@ function App() {
                                     name="fechaInicio"
                                     value={ventaForm.fechaInicio}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    style={{
+                                      ...inputStyle,
+                                      border:
+                                        ventaValidationStep >= 2 && !ventaForm.fechaInicio
+                                          ? '1px solid rgba(248,113,113,0.8)'
+                                          : inputStyle.border,
+                                    }}
                                   />
                                   <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
                                     Al elegir la fecha de inicio, el sistema propone automáticamente 1 mes para la fecha de cierre.
                                   </div>
+                                  {ventaValidationStep >= 2 && !ventaForm.fechaInicio && (
+                                    <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                      Debes indicar la fecha de inicio.
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -3774,11 +4109,22 @@ function App() {
                                     name="fechaCierre"
                                     value={ventaForm.fechaCierre}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    style={{
+                                      ...inputStyle,
+                                      border:
+                                        ventaValidationStep >= 2 && !ventaForm.fechaCierre
+                                          ? '1px solid rgba(248,113,113,0.8)'
+                                          : inputStyle.border,
+                                    }}
                                   />
                                   {ventaForm.fechaCierre && (
                                     <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
                                       Mes de referencia: <b style={{ color: '#f8fafc' }}>{formatMonthYearLabel(ventaForm.fechaCierre)}</b>
+                                    </div>
+                                  )}
+                                  {ventaValidationStep >= 2 && !ventaForm.fechaCierre && (
+                                    <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                      Debes indicar la fecha de cierre.
                                     </div>
                                   )}
                                 </div>
@@ -3794,6 +4140,10 @@ function App() {
                                     readOnly={ventaClientDataLocked}
                                     style={{
                                       ...inputStyle,
+                                      border:
+                                        ventaValidationStep >= 2 && ventaMonto <= 0
+                                          ? '1px solid rgba(248,113,113,0.8)'
+                                          : inputStyle.border,
                                       background: ventaClientDataLocked ? '#0b1730' : inputStyle.background,
                                       cursor: ventaClientDataLocked ? 'not-allowed' : 'text',
                                       opacity: ventaClientDataLocked ? 0.88 : 1,
@@ -3802,6 +4152,11 @@ function App() {
                                   {ventaClientDataLocked && (
                                     <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
                                       El monto fijo del cliente se administra desde Clientes.
+                                    </div>
+                                  )}
+                                  {ventaValidationStep >= 2 && ventaMonto <= 0 && (
+                                    <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                      El monto debe ser mayor a 0.
                                     </div>
                                   )}
                                 </div>
@@ -3814,8 +4169,19 @@ function App() {
                                     placeholder="Descuento"
                                     value={ventaForm.descuento}
                                     onChange={handleVentaChange}
-                                    style={inputStyle}
+                                    style={{
+                                      ...inputStyle,
+                                      border:
+                                        ventaValidationStep >= 2 && (ventaDescuento < 0 || ventaDescuento > ventaMonto)
+                                          ? '1px solid rgba(248,113,113,0.8)'
+                                          : inputStyle.border,
+                                    }}
                                   />
+                                  {ventaValidationStep >= 2 && ventaDescuento > ventaMonto && (
+                                    <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                      El descuento no puede ser mayor que el monto.
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -3849,6 +4215,12 @@ function App() {
                                     disabled={ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'}
                                     style={{
                                       ...inputStyle,
+                                      border:
+                                        ventaValidationStep >= 2 &&
+                                        ventaForm.pagoRegistrado === 'SI' &&
+                                        !String(ventaForm.fechaPago || ventaForm.fechaInicio).trim()
+                                          ? '1px solid rgba(248,113,113,0.8)'
+                                          : inputStyle.border,
                                       opacity: ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA' ? 0.6 : 1,
                                       cursor:
                                         ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'
@@ -3861,6 +4233,13 @@ function App() {
                                       ? 'Se dejará vacía porque la venta quedará pendiente.'
                                       : 'Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.'}
                                   </div>
+                                  {ventaValidationStep >= 2 &&
+                                    ventaForm.pagoRegistrado === 'SI' &&
+                                    !String(ventaForm.fechaPago || ventaForm.fechaInicio).trim() && (
+                                      <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                        Cuando el pago está recibido, debe existir una fecha de pago.
+                                      </div>
+                                    )}
                                 </div>
 
                                 <div style={{ gridColumn: '1 / -1' }}>
@@ -3907,12 +4286,14 @@ function App() {
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => setVentaFormStep(4)}
-                                    disabled={!ventaStep3Complete}
+                                    onClick={() => {
+                                      setVentaValidationStep(3)
+                                      if (!ventaStep3Complete) return
+                                      setVentaFormStep(4)
+                                    }}
                                     style={{
                                       ...buttonPrimary,
-                                      opacity: ventaStep3Complete ? 1 : 0.6,
-                                      cursor: ventaStep3Complete ? 'pointer' : 'not-allowed',
+                                      opacity: ventaStep3Complete ? 1 : 0.82,
                                     }}
                                   >
                                     Continuar a Cuenta
@@ -3982,16 +4363,32 @@ function App() {
                                         placeholder="Ej: Smart TV, iPad Mini, consola, etc."
                                         value={ventaForm.otroTipoDispositivo}
                                         onChange={handleVentaChange}
-                                        style={inputStyle}
+                                        style={{
+                                          ...inputStyle,
+                                          border:
+                                            ventaValidationStep >= 3 && ventaHasOtroSinDetalle
+                                              ? '1px solid rgba(248,113,113,0.8)'
+                                              : inputStyle.border,
+                                        }}
                                       />
                                       <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
                                         Si necesitas más de uno, sepáralos por coma.
                                       </div>
+                                      {ventaValidationStep >= 3 && ventaHasOtroSinDetalle && (
+                                        <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                          Debes indicar el detalle del dispositivo marcado como Otro.
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                   <div style={{ marginTop: '10px', color: '#94a3b8', fontSize: '12px' }}>
                                     Selección final: {buildVentaDeviceList(ventaForm).join(', ') || 'Sin dispositivos seleccionados'}
                                   </div>
+                                  {ventaValidationStep >= 3 && !selectedVentaDevices.length && (
+                                    <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                      Debes seleccionar al menos un dispositivo.
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div>
@@ -4089,6 +4486,26 @@ function App() {
                                   alignItems: 'start',
                                 }}
                               >
+                                <div
+                                  style={{
+                                    gridColumn: '1 / -1',
+                                    padding: '14px 16px',
+                                    borderRadius: '14px',
+                                    border: '1px solid rgba(96,165,250,0.16)',
+                                    background: 'rgba(15,23,42,0.55)',
+                                    color: '#cbd5e1',
+                                    lineHeight: 1.65,
+                                  }}
+                                >
+                                  Resumen final: <b style={{ color: '#f8fafc' }}>{ventaForm.cliente || 'Sin cliente'}</b>
+                                  <br />
+                                  Periodo: <b style={{ color: '#f8fafc' }}>{formatDateDisplay(ventaForm.fechaInicio)} al {formatDateDisplay(ventaForm.fechaCierre)}</b>
+                                  <br />
+                                  Dispositivos: <b style={{ color: '#f8fafc' }}>{selectedVentaDevices.join(', ') || 'Sin dispositivos'}</b>
+                                  <br />
+                                  Total a guardar: <b style={{ color: '#f8fafc' }}>{formatCurrencyPen(ventaResumenNeto)}</b>
+                                </div>
+
                                 <div>
                                   <label style={formLabelStyle}>Modo de asignación</label>
                                   <select
@@ -4110,7 +4527,13 @@ function App() {
                                         name="cuentaAccesoId"
                                         value={ventaForm.cuentaAccesoId}
                                         onChange={handleVentaChange}
-                                        style={inputStyle}
+                                        style={{
+                                          ...inputStyle,
+                                          border:
+                                            ventaValidationStep >= 4 && !ventaForm.cuentaAccesoId
+                                              ? '1px solid rgba(248,113,113,0.8)'
+                                              : inputStyle.border,
+                                        }}
                                       >
                                         <option value="">Selecciona una cuenta</option>
                                         {manualAccounts.map((cuenta) => (
@@ -4124,6 +4547,11 @@ function App() {
                                           ? `Clientes registrados: ${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}`
                                           : 'Selecciona una cuenta activa disponible.'}
                                       </div>
+                                      {ventaValidationStep >= 4 && !ventaForm.cuentaAccesoId && (
+                                        <div style={{ marginTop: '8px', color: '#fca5a5', fontSize: '12px' }}>
+                                          Debes elegir una cuenta manual para cerrar la venta.
+                                        </div>
+                                      )}
                                     </>
                                   ) : (
                                     <div
@@ -4140,6 +4568,11 @@ function App() {
                                       }}
                                     >
                                       El modo automático elige la mejor cuenta activa disponible según la capacidad libre del momento.
+                                      {!selectedCuentaPreview && (
+                                        <div style={{ marginTop: '8px', color: '#fca5a5' }}>
+                                          Ahora mismo no hay una cuenta activa con espacio disponible.
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
@@ -4225,12 +4658,7 @@ function App() {
                           <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                             <button
                               type="submit"
-                              disabled={!ventaStep4Complete}
-                              style={{
-                                ...buttonPrimary,
-                                opacity: ventaStep4Complete ? 1 : 0.6,
-                                cursor: ventaStep4Complete ? 'pointer' : 'not-allowed',
-                              }}
+                              style={buttonPrimary}
                             >
                               {editingVentaId ? 'Actualizar' : 'Guardar'}
                             </button>
@@ -4241,7 +4669,7 @@ function App() {
 
                             {!ventaStep4Complete && (
                               <div style={{ color: '#94a3b8', fontSize: '12px', alignSelf: 'center' }}>
-                                Completa los pasos y llega hasta Cuenta para habilitar el guardado.
+                                Si todavía falta algo, al guardar te llevaré directamente al paso que debas revisar.
                               </div>
                             )}
                           </div>
@@ -5343,6 +5771,130 @@ function App() {
 
                 {isAdmin && (
                   <>
+                <ConfigSectionAccordion
+                  icon="shield"
+                  title="Respaldos y restauración"
+                  description="Crea copias lógicas del sistema, valida el disparador automático diario y restaura una versión anterior si hace falta."
+                  summaryValue={
+                    loadingBackups
+                      ? 'Cargando...'
+                      : backupInfo.items.length
+                        ? `${backupInfo.items.length} respaldo${backupInfo.items.length === 1 ? '' : 's'}`
+                        : 'Sin respaldos'
+                  }
+                  summaryValueStyle={backupInfo.items.length ? badgeActive : badgeInactive}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                    <button type="button" onClick={crearRespaldoManual} style={buttonPrimary}>
+                      Crear respaldo ahora
+                    </button>
+                    <button type="button" onClick={() => void cargarBackups()} style={buttonSecondary}>
+                      Actualizar lista
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '12px',
+                    }}
+                  >
+                    <DashboardMiniStat
+                      label="Respaldos guardados"
+                      value={loadingBackups ? '...' : String(backupInfo.items.length)}
+                      accent="#60a5fa"
+                    />
+                    <DashboardMiniStat
+                      label="Auto respaldo"
+                      value={backupInfo.autoEnabled ? `Activo ${String(backupInfo.targetHour).padStart(2, '0')}:00` : 'Desactivado'}
+                      accent={backupInfo.autoEnabled ? '#4ade80' : '#f87171'}
+                    />
+                    <DashboardMiniStat
+                      label="Último auto respaldo"
+                      value={backupInfo.lastRunDate ? formatDateDisplay(backupInfo.lastRunDate) : 'Sin ejecutar'}
+                      accent="#fbbf24"
+                    />
+                    <DashboardMiniStat
+                      label="Última restauración"
+                      value={backupInfo.lastRestoredAt ? formatDateDisplay(backupInfo.lastRestoredAt) : 'Nunca'}
+                      accent="#c084fc"
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(148,163,184,0.12)',
+                      background: 'rgba(2,6,23,0.34)',
+                      color: '#cbd5e1',
+                      lineHeight: 1.7,
+                    }}
+                  >
+                    El sistema guarda respaldos automáticos diarios y conserva hasta{' '}
+                    <b style={{ color: '#f8fafc' }}>{backupInfo.keepLimit}</b> copias. Si restauras una versión, el backend
+                    verifica al final que los conteos restaurados coincidan con el respaldo elegido.
+                  </div>
+
+                  {loadingBackups ? (
+                    <p style={{ margin: 0, color: '#94a3b8' }}>Cargando respaldos...</p>
+                  ) : backupInfo.items.length === 0 ? (
+                    <p style={{ margin: 0, color: '#94a3b8' }}>
+                      Todavía no hay respaldos guardados. Puedes crear el primero con el botón superior.
+                    </p>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {backupInfo.items.map((backup) => (
+                        <div
+                          key={backup.key}
+                          style={{
+                            borderRadius: '16px',
+                            border: '1px solid rgba(51,65,85,0.9)',
+                            background: 'rgba(2,6,23,0.28)',
+                            padding: '16px',
+                            display: 'grid',
+                            gap: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                            <div>
+                              <div style={{ color: '#f8fafc', fontWeight: 800 }}>{backup.key}</div>
+                              <div style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
+                                Generado: {formatChatTimestamp(backup.generatedAt)} · Tipo: {backup.trigger}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={backup.verified ? badgeActive : badgeInactive}>
+                                {backup.verified ? 'Verificado' : 'Pendiente'}
+                              </span>
+                              <button type="button" onClick={() => restaurarRespaldo(backup)} style={buttonSecondary}>
+                                Restaurar
+                              </button>
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                              gap: '10px',
+                            }}
+                          >
+                            <DashboardMetricLine label="Clientes" value={String(backup.counts.clientes)} />
+                            <DashboardMetricLine label="Ventas" value={String(backup.counts.ventas)} />
+                            <DashboardMetricLine label="Pagos" value={String(backup.counts.pagos)} />
+                            <DashboardMetricLine label="Cuentas" value={String(backup.counts.cuentas)} />
+                            <DashboardMetricLine label="Usuarios" value={String(backup.counts.usuarios)} />
+                            <DashboardMetricLine label="Actividad" value={String(backup.counts.actividad)} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ConfigSectionAccordion>
+
                 <ConfigSectionAccordion
                   icon="whatsapp"
                   title="Configuración de WhatsApp"

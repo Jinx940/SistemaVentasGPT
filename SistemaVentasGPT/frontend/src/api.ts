@@ -18,6 +18,9 @@ import type {
   PagarVentaPayload,
   Pago,
   PagoResumenResponse,
+  SystemBackupCreateResponse,
+  SystemBackupListResponse,
+  SystemBackupRestoreResponse,
   UsuarioPayload,
   UsuarioSistema,
   Venta,
@@ -316,4 +319,20 @@ export function sendWhatsAppChatReply(telefono: string, payload: WhatsAppChatRep
 
 export function clearMaintenanceHistory() {
   return apiFetch<{ ok: true }>('/maintenance/clear-history', { method: 'DELETE' })
+}
+
+export function getSystemBackups() {
+  return apiFetch<SystemBackupListResponse>('/maintenance/backups')
+}
+
+export function createSystemBackup() {
+  return apiFetch<SystemBackupCreateResponse>('/maintenance/backups/create', {
+    method: 'POST',
+  })
+}
+
+export function restoreSystemBackup(key: string) {
+  return apiFetch<SystemBackupRestoreResponse>(`/maintenance/backups/${encodeURIComponent(key)}/restore`, {
+    method: 'POST',
+  })
 }

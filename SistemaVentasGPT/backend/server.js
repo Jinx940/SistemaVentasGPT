@@ -7,6 +7,7 @@ require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { Pool } = require('pg');
+const { shouldRunAutomaticBackup } = require('./lib/auto-backup');
 
 const app = express();
 
@@ -62,9 +63,26 @@ const WHATSAPP_AUTO_SEND_INTERVAL_MINUTES = Math.max(
 const WHATSAPP_AUTO_SEND_ENABLED =
   String(process.env.WA_AUTO_SEND_ENABLED || 'true').toLowerCase() === 'true';
 const AUTO_VENTA_PAYMENT_NOTE = 'Pago registrado al guardar la venta';
+const SYSTEM_BACKUP_PREFIX = 'SYSTEM_BACKUP.SNAPSHOT.';
+const SYSTEM_BACKUP_LATEST_KEY = 'SYSTEM_BACKUP.LATEST_KEY';
+const SYSTEM_BACKUP_LAST_RUN_KEY = 'SYSTEM_BACKUP.LAST_RUN_DATE';
+const SYSTEM_BACKUP_LAST_RESTORED_KEY = 'SYSTEM_BACKUP.LAST_RESTORED_KEY';
+const SYSTEM_BACKUP_LAST_RESTORED_AT_KEY = 'SYSTEM_BACKUP.LAST_RESTORED_AT';
+const SYSTEM_BACKUP_INTERVAL_MINUTES = Math.max(
+  5,
+  Number(process.env.AUTO_BACKUP_INTERVAL_MINUTES) || 15
+);
+const SYSTEM_BACKUP_KEEP = Math.max(3, Number(process.env.AUTO_BACKUP_KEEP) || 7);
+const SYSTEM_BACKUP_TARGET_HOUR = Math.min(
+  23,
+  Math.max(0, Number(process.env.AUTO_BACKUP_TARGET_HOUR) || 3)
+);
+const SYSTEM_BACKUP_ENABLED =
+  String(process.env.AUTO_BACKUP_ENABLED || 'true').toLowerCase() === 'true';
 
 const loginAttemptStore = new Map();
 let whatsAppAutoReminderPromise = null;
+let systemBackupPromise = null;
 
 const MONTH_SHEETS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -626,6 +644,47 @@ async function upsertClienteFromVenta(body, clienteId = null, options = {}) {
   });
 }
 
+async function resolveClienteForVenta(body, currentClienteId = null) {
+  if (currentClienteId) {
+    const actual = await prisma.cliente.findUnique({
+      where: { id: currentClienteId },
+    });
+
+    if (!actual) {
+      throw new Error('El cliente asociado a esta venta ya no existe.');
+    }
+
+    return actual;
+  }
+
+  const clienteId = Number(body.clienteId || 0);
+
+  if (clienteId) {
+    const cliente = await prisma.cliente.findUnique({
+      where: { id: clienteId },
+    });
+
+    if (!cliente) {
+      throw new Error('El cliente seleccionado ya no existe. Actualiza la lista e inténtalo otra vez.');
+    }
+
+    return cliente;
+  }
+
+  const clientePorTelefono = await findClienteByTelefono(body.telefono);
+  if (clientePorTelefono?.id) {
+    const cliente = await prisma.cliente.findUnique({
+      where: { id: clientePorTelefono.id },
+    });
+
+    if (cliente) {
+      return cliente;
+    }
+  }
+
+  throw new Error('Primero registra el cliente en la pestaña Clientes y luego selecciónalo aquí.');
+}
+
 function buildVentaData(body, options = {}) {
   const fechaInicio = parseLocalDate(body.fechaInicio || body.fecha_inicio);
   const fechaCierre = parseLocalDate(body.fechaCierre || body.fecha_cierre);
@@ -811,6 +870,666 @@ async function setConfigValue(clave, valor) {
     update: { valor: valor == null ? '' : String(valor) },
     create: { clave, valor: valor == null ? '' : String(valor) },
   });
+}
+
+async function getConfigValue(clave) {
+  const row = await prisma.configuracionSistema.findUnique({
+    where: { clave },
+  });
+
+  return row?.valor || '';
+}
+
+function isSystemBackupConfigKey(clave) {
+  const key = cleanText(clave);
+  return (
+    key === SYSTEM_BACKUP_LATEST_KEY ||
+    key === SYSTEM_BACKUP_LAST_RUN_KEY ||
+    key === SYSTEM_BACKUP_LAST_RESTORED_KEY ||
+    key === SYSTEM_BACKUP_LAST_RESTORED_AT_KEY ||
+    key.startsWith(SYSTEM_BACKUP_PREFIX)
+  );
+}
+
+function getSystemBackupPublicKey(clave) {
+  if (!String(clave || '').startsWith(SYSTEM_BACKUP_PREFIX)) {
+    return cleanText(clave);
+  }
+
+  return String(clave).slice(SYSTEM_BACKUP_PREFIX.length);
+}
+
+function normalizeSystemBackupStorageKey(value) {
+  const key = cleanText(value);
+  if (!key) return '';
+  return key.startsWith(SYSTEM_BACKUP_PREFIX) ? key : `${SYSTEM_BACKUP_PREFIX}${key}`;
+}
+
+function normalizeSystemBackupTimestamp(value = new Date()) {
+  return value.toISOString().replace(/[:.]/g, '-');
+}
+
+function serializeDateValue(value) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function serializeMoneyValue(value) {
+  if (value == null) return null;
+  return round2(Number(value || 0));
+}
+
+function getBackupCountsFromSnapshot(snapshot) {
+  const data = snapshot?.data || {};
+
+  return {
+    usuarios: Array.isArray(data.usuarios) ? data.usuarios.length : 0,
+    clientes: Array.isArray(data.clientes) ? data.clientes.length : 0,
+    cuentas: Array.isArray(data.cuentas) ? data.cuentas.length : 0,
+    ventas: Array.isArray(data.ventas) ? data.ventas.length : 0,
+    pagos: Array.isArray(data.pagos) ? data.pagos.length : 0,
+    historialBajas: Array.isArray(data.historialBajas) ? data.historialBajas.length : 0,
+    whatsAppLogs: Array.isArray(data.whatsAppLogs) ? data.whatsAppLogs.length : 0,
+    actividad: Array.isArray(data.actividad) ? data.actividad.length : 0,
+    configuracion: Array.isArray(data.configuracion) ? data.configuracion.length : 0,
+  };
+}
+
+function toSystemBackupSummary(storageKey, snapshot) {
+  const publicKey = getSystemBackupPublicKey(storageKey);
+  const counts = getBackupCountsFromSnapshot(snapshot);
+
+  return {
+    key: publicKey,
+    storageKey,
+    generatedAt: snapshot?.generatedAt || null,
+    trigger: cleanText(snapshot?.trigger || 'MANUAL') || 'MANUAL',
+    verified: snapshot?.verified !== false,
+    counts,
+  };
+}
+
+async function getSystemDataCounts(client = prisma) {
+  const [usuarios, clientes, cuentas, ventas, pagos, historialBajas, whatsAppLogs, actividad, configuracion] =
+    await Promise.all([
+      client.usuarioSistema.count(),
+      client.cliente.count(),
+      client.cuentaAcceso.count(),
+      client.venta.count(),
+      client.pago.count(),
+      client.historialBaja.count(),
+      client.whatsAppLog.count(),
+      client.actividadSistema.count(),
+      client.configuracionSistema.count({
+        where: {
+          NOT: [
+            { clave: { startsWith: SYSTEM_BACKUP_PREFIX } },
+            { clave: SYSTEM_BACKUP_LATEST_KEY },
+            { clave: SYSTEM_BACKUP_LAST_RUN_KEY },
+            { clave: SYSTEM_BACKUP_LAST_RESTORED_KEY },
+            { clave: SYSTEM_BACKUP_LAST_RESTORED_AT_KEY },
+          ],
+        },
+      }),
+    ]);
+
+  return {
+    usuarios,
+    clientes,
+    cuentas,
+    ventas,
+    pagos,
+    historialBajas,
+    whatsAppLogs,
+    actividad,
+    configuracion,
+  };
+}
+
+function parseStoredSystemBackup(row) {
+  if (!row?.valor) return null;
+
+  try {
+    const snapshot = JSON.parse(row.valor);
+    return {
+      snapshot,
+      summary: toSystemBackupSummary(row.clave, snapshot),
+    };
+  } catch (error) {
+    console.error(`No se pudo leer el respaldo ${row.clave}:`, error);
+    return null;
+  }
+}
+
+async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
+  const [
+    usuarios,
+    sesiones,
+    clientes,
+    cuentas,
+    ventas,
+    pagos,
+    historialBajas,
+    whatsAppLogs,
+    actividad,
+    configRows,
+  ] = await Promise.all([
+    prisma.usuarioSistema.findMany({ orderBy: { id: 'asc' } }),
+    prisma.sesionSistema.findMany({ orderBy: { id: 'asc' } }),
+    prisma.cliente.findMany({ orderBy: { id: 'asc' } }),
+    prisma.cuentaAcceso.findMany({ orderBy: { id: 'asc' } }),
+    prisma.venta.findMany({ orderBy: { id: 'asc' } }),
+    prisma.pago.findMany({ orderBy: { id: 'asc' } }),
+    prisma.historialBaja.findMany({ orderBy: { id: 'asc' } }),
+    prisma.whatsAppLog.findMany({ orderBy: { id: 'asc' } }),
+    prisma.actividadSistema.findMany({ orderBy: { id: 'asc' } }),
+    prisma.configuracionSistema.findMany({
+      where: {
+        NOT: [
+          { clave: { startsWith: SYSTEM_BACKUP_PREFIX } },
+          { clave: SYSTEM_BACKUP_LATEST_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RUN_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RESTORED_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RESTORED_AT_KEY },
+        ],
+      },
+      orderBy: { clave: 'asc' },
+    }),
+  ]);
+
+  const snapshot = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    trigger,
+    verified: true,
+    data: {
+      usuarios: usuarios.map((item) => ({
+        id: item.id,
+        nombre: item.nombre,
+        correo: item.correo,
+        passwordHash: item.passwordHash,
+        rol: item.rol,
+        activo: !!item.activo,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      sesiones: sesiones.map((item) => ({
+        id: item.id,
+        usuarioId: item.usuarioId,
+        tokenHash: item.tokenHash,
+        expiresAt: serializeDateValue(item.expiresAt),
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      clientes: clientes.map((item) => ({
+        id: item.id,
+        nombre: item.nombre,
+        telefono: item.telefono,
+        monto: serializeMoneyValue(item.monto),
+        carpeta: item.carpeta,
+        observacion: item.observacion || null,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      cuentas: cuentas.map((item) => ({
+        id: item.id,
+        correo: item.correo,
+        password: item.password,
+        capacidad: Number(item.capacidad || 0),
+        activa: !!item.activa,
+        observacion: item.observacion || null,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      ventas: ventas.map((item) => ({
+        id: item.id,
+        clienteId: item.clienteId,
+        cuentaAccesoId: item.cuentaAccesoId ?? null,
+        fechaInicio: serializeDateValue(item.fechaInicio),
+        fechaCierre: serializeDateValue(item.fechaCierre),
+        fechaPago: serializeDateValue(item.fechaPago),
+        monto: serializeMoneyValue(item.monto),
+        descuento: serializeMoneyValue(item.descuento),
+        montoPagado: serializeMoneyValue(item.montoPagado),
+        estado: item.estado,
+        tipoDispositivo: item.tipoDispositivo,
+        cantidadDispositivos: Number(item.cantidadDispositivos || 0),
+        observacion: item.observacion || null,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      pagos: pagos.map((item) => ({
+        id: item.id,
+        ventaId: item.ventaId,
+        usuarioId: item.usuarioId ?? null,
+        monto: serializeMoneyValue(item.monto),
+        fechaPago: serializeDateValue(item.fechaPago),
+        mesesPagados: Number(item.mesesPagados || 1),
+        observacion: item.observacion || null,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      historialBajas: historialBajas.map((item) => ({
+        id: item.id,
+        ventaId: item.ventaId ?? null,
+        clienteId: item.clienteId,
+        clienteNombre: item.clienteNombre,
+        telefono: item.telefono || null,
+        detalle: item.detalle || null,
+        fechaBaja: serializeDateValue(item.fechaBaja),
+      })),
+      whatsAppLogs: whatsAppLogs.map((item) => ({
+        id: item.id,
+        ventaId: item.ventaId ?? null,
+        clienteNombre: item.clienteNombre || null,
+        telefono: item.telefono || null,
+        fechaObjetivo: serializeDateValue(item.fechaObjetivo),
+        estado: item.estado || null,
+        detalle: item.detalle || null,
+        createdAt: serializeDateValue(item.createdAt),
+      })),
+      actividad: actividad.map((item) => ({
+        id: item.id,
+        usuarioId: item.usuarioId ?? null,
+        accion: item.accion,
+        entidad: item.entidad,
+        entidadId: item.entidadId ?? null,
+        descripcion: item.descripcion || null,
+        createdAt: serializeDateValue(item.createdAt),
+      })),
+      configuracion: configRows.map((item) => ({
+        clave: item.clave,
+        valor: item.valor || '',
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+    },
+  };
+
+  snapshot.counts = getBackupCountsFromSnapshot(snapshot);
+  return snapshot;
+}
+
+async function listSystemBackups() {
+  const [rows, latestKey, lastRunDate, lastRestoredKey, lastRestoredAt] = await Promise.all([
+    prisma.configuracionSistema.findMany({
+      where: {
+        clave: {
+          startsWith: SYSTEM_BACKUP_PREFIX,
+        },
+      },
+      orderBy: { clave: 'desc' },
+    }),
+    getConfigValue(SYSTEM_BACKUP_LATEST_KEY),
+    getConfigValue(SYSTEM_BACKUP_LAST_RUN_KEY),
+    getConfigValue(SYSTEM_BACKUP_LAST_RESTORED_KEY),
+    getConfigValue(SYSTEM_BACKUP_LAST_RESTORED_AT_KEY),
+  ]);
+
+  const items = rows
+    .map(parseStoredSystemBackup)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.summary.generatedAt || 0).getTime() - new Date(a.summary.generatedAt || 0).getTime())
+    .map((item) => item.summary);
+
+  return {
+    items,
+    autoEnabled: SYSTEM_BACKUP_ENABLED,
+    targetHour: SYSTEM_BACKUP_TARGET_HOUR,
+    keepLimit: SYSTEM_BACKUP_KEEP,
+    latestKey: getSystemBackupPublicKey(latestKey),
+    lastRunDate: lastRunDate || null,
+    lastRestoredKey: getSystemBackupPublicKey(lastRestoredKey),
+    lastRestoredAt: lastRestoredAt || null,
+  };
+}
+
+async function pruneSystemBackups() {
+  const { items } = await listSystemBackups();
+  const toDelete = items.slice(SYSTEM_BACKUP_KEEP);
+
+  if (!toDelete.length) return;
+
+  await prisma.configuracionSistema.deleteMany({
+    where: {
+      clave: {
+        in: toDelete.map((item) => item.storageKey),
+      },
+    },
+  });
+}
+
+async function createSystemBackup({ trigger = 'MANUAL', usuarioId = null } = {}) {
+  const snapshot = await buildSystemBackupSnapshot(trigger);
+  const publicKey = normalizeSystemBackupTimestamp(new Date(snapshot.generatedAt));
+  const storageKey = `${SYSTEM_BACKUP_PREFIX}${publicKey}`;
+
+  await setConfigValue(storageKey, JSON.stringify(snapshot));
+  await setConfigValue(SYSTEM_BACKUP_LATEST_KEY, storageKey);
+
+  if (trigger === 'AUTO') {
+    await setConfigValue(SYSTEM_BACKUP_LAST_RUN_KEY, snapshot.generatedAt.slice(0, 10));
+  }
+
+  await pruneSystemBackups();
+
+  await registrarActividad({
+    usuarioId,
+    accion: 'BACKUP_CREAR',
+    entidad: 'BACKUP',
+    descripcion: `Respaldo ${trigger} creado: ${publicKey}`,
+  });
+
+  return {
+    ok: true,
+    backup: toSystemBackupSummary(storageKey, snapshot),
+  };
+}
+
+async function getStoredSystemBackup(storageKey) {
+  const row = await prisma.configuracionSistema.findUnique({
+    where: { clave: storageKey },
+  });
+
+  if (!row) {
+    throw new Error('No se encontró el respaldo solicitado.');
+  }
+
+  const parsed = parseStoredSystemBackup(row);
+  if (!parsed) {
+    throw new Error('No se pudo leer el respaldo solicitado.');
+  }
+
+  return parsed;
+}
+
+async function resetTableSequence(client, tableName, columnName = 'id') {
+  const seqRows = await client.$queryRawUnsafe(
+    `SELECT pg_get_serial_sequence('\"${tableName}\"', '${columnName}') AS seq`
+  );
+  const sequenceName = seqRows?.[0]?.seq;
+
+  if (!sequenceName) return;
+
+  const maxRows = await client.$queryRawUnsafe(
+    `SELECT COALESCE(MAX(\"${columnName}\"), 0) AS max FROM \"${tableName}\"`
+  );
+  const maxValue = Number(maxRows?.[0]?.max || 0);
+
+  if (maxValue > 0) {
+    await client.$executeRawUnsafe(`SELECT setval('${sequenceName}', ${maxValue}, true)`);
+  } else {
+    await client.$executeRawUnsafe(`SELECT setval('${sequenceName}', 1, false)`);
+  }
+}
+
+function parseDateOrNull(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
+  const { snapshot, summary } = await getStoredSystemBackup(storageKey);
+  const expectedCounts = getBackupCountsFromSnapshot(snapshot);
+  const data = snapshot.data || {};
+
+  await prisma.$transaction(async (tx) => {
+    await tx.sesionSistema.deleteMany({});
+    await tx.pago.deleteMany({});
+    await tx.venta.deleteMany({});
+    await tx.historialBaja.deleteMany({});
+    await tx.whatsAppLog.deleteMany({});
+    await tx.actividadSistema.deleteMany({});
+    await tx.cuentaAcceso.deleteMany({});
+    await tx.cliente.deleteMany({});
+    await tx.usuarioSistema.deleteMany({});
+    await tx.configuracionSistema.deleteMany({
+      where: {
+        NOT: [
+          { clave: { startsWith: SYSTEM_BACKUP_PREFIX } },
+          { clave: SYSTEM_BACKUP_LATEST_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RUN_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RESTORED_KEY },
+          { clave: SYSTEM_BACKUP_LAST_RESTORED_AT_KEY },
+        ],
+      },
+    });
+
+    if (Array.isArray(data.usuarios) && data.usuarios.length) {
+      await tx.usuarioSistema.createMany({
+        data: data.usuarios.map((item) => ({
+          id: item.id,
+          nombre: item.nombre,
+          correo: item.correo,
+          passwordHash: item.passwordHash,
+          rol: item.rol,
+          activo: !!item.activo,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.sesiones) && data.sesiones.length) {
+      await tx.sesionSistema.createMany({
+        data: data.sesiones.map((item) => ({
+          id: item.id,
+          usuarioId: item.usuarioId,
+          tokenHash: item.tokenHash,
+          expiresAt: parseDateOrNull(item.expiresAt),
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.clientes) && data.clientes.length) {
+      await tx.cliente.createMany({
+        data: data.clientes.map((item) => ({
+          id: item.id,
+          nombre: item.nombre,
+          telefono: item.telefono,
+          monto: item.monto,
+          carpeta: item.carpeta,
+          observacion: item.observacion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.cuentas) && data.cuentas.length) {
+      await tx.cuentaAcceso.createMany({
+        data: data.cuentas.map((item) => ({
+          id: item.id,
+          correo: item.correo,
+          password: item.password,
+          capacidad: item.capacidad,
+          activa: !!item.activa,
+          observacion: item.observacion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.ventas) && data.ventas.length) {
+      await tx.venta.createMany({
+        data: data.ventas.map((item) => ({
+          id: item.id,
+          clienteId: item.clienteId,
+          cuentaAccesoId: item.cuentaAccesoId ?? null,
+          fechaInicio: parseDateOrNull(item.fechaInicio),
+          fechaCierre: parseDateOrNull(item.fechaCierre),
+          fechaPago: parseDateOrNull(item.fechaPago),
+          monto: item.monto,
+          descuento: item.descuento,
+          montoPagado: item.montoPagado,
+          estado: item.estado,
+          tipoDispositivo: item.tipoDispositivo,
+          cantidadDispositivos: item.cantidadDispositivos,
+          observacion: item.observacion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.pagos) && data.pagos.length) {
+      await tx.pago.createMany({
+        data: data.pagos.map((item) => ({
+          id: item.id,
+          ventaId: item.ventaId,
+          usuarioId: item.usuarioId ?? null,
+          monto: item.monto,
+          fechaPago: parseDateOrNull(item.fechaPago),
+          mesesPagados: item.mesesPagados,
+          observacion: item.observacion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.historialBajas) && data.historialBajas.length) {
+      await tx.historialBaja.createMany({
+        data: data.historialBajas.map((item) => ({
+          id: item.id,
+          ventaId: item.ventaId ?? null,
+          clienteId: item.clienteId,
+          clienteNombre: item.clienteNombre,
+          telefono: item.telefono,
+          detalle: item.detalle,
+          fechaBaja: parseDateOrNull(item.fechaBaja) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.whatsAppLogs) && data.whatsAppLogs.length) {
+      await tx.whatsAppLog.createMany({
+        data: data.whatsAppLogs.map((item) => ({
+          id: item.id,
+          ventaId: item.ventaId ?? null,
+          clienteNombre: item.clienteNombre,
+          telefono: item.telefono,
+          fechaObjetivo: parseDateOrNull(item.fechaObjetivo),
+          estado: item.estado,
+          detalle: item.detalle,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.actividad) && data.actividad.length) {
+      await tx.actividadSistema.createMany({
+        data: data.actividad.map((item) => ({
+          id: item.id,
+          usuarioId: item.usuarioId ?? null,
+          accion: item.accion,
+          entidad: item.entidad,
+          entidadId: item.entidadId ?? null,
+          descripcion: item.descripcion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.configuracion) && data.configuracion.length) {
+      await tx.configuracionSistema.createMany({
+        data: data.configuracion.map((item) => ({
+          clave: item.clave,
+          valor: item.valor || '',
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    await tx.configuracionSistema.upsert({
+      where: { clave: SYSTEM_BACKUP_LAST_RESTORED_KEY },
+      update: { valor: summary.key },
+      create: { clave: SYSTEM_BACKUP_LAST_RESTORED_KEY, valor: summary.key },
+    });
+
+    await tx.configuracionSistema.upsert({
+      where: { clave: SYSTEM_BACKUP_LAST_RESTORED_AT_KEY },
+      update: { valor: new Date().toISOString() },
+      create: { clave: SYSTEM_BACKUP_LAST_RESTORED_AT_KEY, valor: new Date().toISOString() },
+    });
+
+    await resetTableSequence(tx, 'UsuarioSistema');
+    await resetTableSequence(tx, 'SesionSistema');
+    await resetTableSequence(tx, 'Cliente');
+    await resetTableSequence(tx, 'CuentaAcceso');
+    await resetTableSequence(tx, 'Venta');
+    await resetTableSequence(tx, 'Pago');
+    await resetTableSequence(tx, 'HistorialBaja');
+    await resetTableSequence(tx, 'WhatsAppLog');
+    await resetTableSequence(tx, 'ActividadSistema');
+  });
+
+  await registrarActividad({
+    usuarioId,
+    accion: 'BACKUP_RESTAURAR',
+    entidad: 'BACKUP',
+    descripcion: `Sistema restaurado desde ${summary.key}`,
+  });
+
+  const currentCounts = await getSystemDataCounts();
+  const verificationOk = Object.keys(expectedCounts).every(
+    (key) => Number(currentCounts[key] || 0) === Number(expectedCounts[key] || 0)
+  );
+
+  return {
+    ok: true,
+    backup: summary,
+    verification: {
+      ok: verificationOk,
+      expectedCounts,
+      currentCounts,
+    },
+  };
+}
+
+async function runAutomaticSystemBackup() {
+  if (!SYSTEM_BACKUP_ENABLED) return null;
+
+  const lastLocalDate = await getConfigValue(SYSTEM_BACKUP_LAST_RUN_KEY);
+  const backupWindow = shouldRunAutomaticBackup({
+    targetHour: SYSTEM_BACKUP_TARGET_HOUR,
+    lastLocalDate,
+  });
+
+  if (!backupWindow.shouldRun) {
+    return null;
+  }
+
+  const result = await createSystemBackup({ trigger: 'AUTO' });
+  await setConfigValue(SYSTEM_BACKUP_LAST_RUN_KEY, backupWindow.localDateKey);
+  return result;
+}
+
+function startSystemBackupScheduler() {
+  if (!SYSTEM_BACKUP_ENABLED) {
+    console.log('[AUTO_BACKUP] Scheduler desactivado por configuración.');
+    return;
+  }
+
+  const runner = async () => {
+    if (systemBackupPromise) return;
+
+    systemBackupPromise = runAutomaticSystemBackup()
+      .catch((error) => {
+        console.error('[AUTO_BACKUP] Error ejecutando el respaldo automático:', error);
+      })
+      .finally(() => {
+        systemBackupPromise = null;
+      });
+  };
+
+  void runner();
+  setInterval(runner, SYSTEM_BACKUP_INTERVAL_MINUTES * 60 * 1000);
 }
 
 async function getWhatsAppSettings() {
@@ -3722,12 +4441,18 @@ app.get('/ventas', requireAuth, async (req, res) => {
 
 app.post('/ventas', requireAuth, async (req, res) => {
   try {
-    const baseData = buildVentaData(req.body, { defaultEstado: 'PAGADO' });
     const assignmentMode = cleanText(req.body.assignmentMode || 'auto');
-
-    const cliente = await upsertClienteFromVenta(req.body, null, {
-      preserveExisting: true,
-    });
+    const cliente = await resolveClienteForVenta(req.body);
+    const baseData = buildVentaData(
+      {
+        ...req.body,
+        clienteId: cliente.id,
+        cliente: cliente.nombre,
+        telefono: cliente.telefono,
+        monto: cliente.monto,
+      },
+      { defaultEstado: 'PAGADO' }
+    );
 
     const ventaExistente = await prisma.venta.findUnique({
       where: getVentaPeriodoWhere(
@@ -3796,11 +4521,14 @@ app.put('/ventas/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Venta no encontrada.' });
     }
 
-    await upsertClienteFromVenta(req.body, actual.clienteId, {
-      preserveExisting: true,
-    });
-
-    const baseData = buildVentaData(req.body, {
+    const cliente = await resolveClienteForVenta(req.body, actual.clienteId);
+    const baseData = buildVentaData({
+      ...req.body,
+      clienteId: cliente.id,
+      cliente: cliente.nombre,
+      telefono: cliente.telefono,
+      monto: cliente.monto,
+    }, {
       defaultEstado: cleanText(actual.estado) === 'BAJA' ? 'BAJA' : 'PAGADO',
       currentEstado: actual.estado,
     });
@@ -4658,6 +5386,56 @@ app.get('/whatsapp/logs', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/maintenance/backups', requireRole('ADMIN'), async (req, res) => {
+  try {
+    res.json(await listSystemBackups());
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: getFriendlyErrorMessage(error, 'Error al listar respaldos.'),
+    });
+  }
+});
+
+app.post('/maintenance/backups/create', requireRole('ADMIN'), async (req, res) => {
+  try {
+    res.json(
+      await createSystemBackup({
+        trigger: 'MANUAL',
+        usuarioId: req.authUser?.id,
+      })
+    );
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: getFriendlyErrorMessage(error, 'Error creando el respaldo.'),
+    });
+  }
+});
+
+app.post('/maintenance/backups/:backupKey/restore', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const storageKey = normalizeSystemBackupStorageKey(req.params.backupKey);
+    const result = await restoreSystemBackup(storageKey, {
+      usuarioId: req.authUser?.id,
+    });
+
+    if (!result.verification.ok) {
+      return res.status(500).json({
+        error: 'La restauración terminó, pero la verificación final no coincidió con el respaldo.',
+        ...result,
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'Error restaurando el respaldo.'),
+    });
+  }
+});
+
 app.delete('/maintenance/clear-history', requireRole('ADMIN'), async (req, res) => {
   try {
     await prisma.$transaction([
@@ -4689,4 +5467,5 @@ app.get('/dashboard/resumen', requireAuth, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
   startWhatsAppReminderScheduler();
+  startSystemBackupScheduler();
 });

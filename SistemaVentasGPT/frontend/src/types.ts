@@ -223,6 +223,7 @@ export type CuentaPayload = {
 }
 
 export type VentaPayload = {
+  clienteId?: number | null
   cliente: string
   telefono: string
   carpeta: string
@@ -297,6 +298,53 @@ export type AuthSecurityResponse = {
   activeSessions: number
   currentSessionExpiresAt?: string | null
   sessionDurationDays: number
+}
+
+export type SystemBackupCounts = {
+  usuarios: number
+  clientes: number
+  cuentas: number
+  ventas: number
+  pagos: number
+  historialBajas: number
+  whatsAppLogs: number
+  actividad: number
+  configuracion: number
+}
+
+export type SystemBackupSummary = {
+  key: string
+  storageKey?: string
+  generatedAt?: string | null
+  trigger: 'AUTO' | 'MANUAL' | string
+  verified: boolean
+  counts: SystemBackupCounts
+}
+
+export type SystemBackupListResponse = {
+  items: SystemBackupSummary[]
+  autoEnabled: boolean
+  targetHour: number
+  keepLimit: number
+  latestKey?: string | null
+  lastRunDate?: string | null
+  lastRestoredKey?: string | null
+  lastRestoredAt?: string | null
+}
+
+export type SystemBackupCreateResponse = {
+  ok: true
+  backup: SystemBackupSummary
+}
+
+export type SystemBackupRestoreResponse = {
+  ok: true
+  backup: SystemBackupSummary
+  verification: {
+    ok: boolean
+    expectedCounts: SystemBackupCounts
+    currentCounts: SystemBackupCounts
+  }
 }
 
 export type AuthPayload = {
