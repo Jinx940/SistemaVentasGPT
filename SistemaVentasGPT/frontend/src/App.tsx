@@ -449,6 +449,104 @@ function ConfigAccordion({ title, description, defaultOpen = false, children }: 
   )
 }
 
+type ConfigSectionAccordionProps = {
+  icon: Parameters<typeof AppIcon>[0]['name']
+  title: string
+  description: string
+  defaultOpen?: boolean
+  iconBoxStyle?: React.CSSProperties
+  summaryValue?: string
+  summaryValueStyle?: React.CSSProperties
+  children: React.ReactNode
+}
+
+function ConfigSectionAccordion({
+  icon,
+  title,
+  description,
+  defaultOpen = false,
+  iconBoxStyle,
+  summaryValue,
+  summaryValueStyle,
+  children,
+}: ConfigSectionAccordionProps) {
+  return (
+    <details
+      open={defaultOpen}
+      style={{
+        ...cardStyle,
+        padding: 0,
+        overflow: 'hidden',
+      }}
+    >
+      <summary
+        style={{
+          cursor: 'pointer',
+          padding: '18px 20px',
+          listStyle: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '14px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              display: 'grid',
+              placeItems: 'center',
+              borderRadius: '14px',
+              background: 'rgba(37,99,235,0.14)',
+              color: '#bfdbfe',
+              flexShrink: 0,
+              ...iconBoxStyle,
+            }}
+          >
+            <AppIcon name={icon} />
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h2>
+            <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.5 }}>{description}</p>
+          </div>
+        </div>
+
+        {summaryValue ? (
+          <span
+            style={
+              summaryValueStyle || {
+                display: 'inline-block',
+                padding: '7px 12px',
+                borderRadius: '10px',
+                background: 'rgba(59,130,246,0.16)',
+                color: '#bfdbfe',
+                fontSize: '12px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+              }
+            }
+          >
+            {summaryValue}
+          </span>
+        ) : null}
+      </summary>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: '18px',
+          padding: '0 20px 20px',
+          borderTop: '1px solid rgba(148,163,184,0.08)',
+        }}
+      >
+        {children}
+      </div>
+    </details>
+  )
+}
+
 function formatChatTimestamp(value?: string | null) {
   if (!value) return '-'
 
@@ -4441,29 +4539,27 @@ function App() {
 
             {activeTab === 'configuracion' && (
               <div style={{ display: 'grid', gap: '20px' }}>
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '42px',
-                          height: '42px',
-                          display: 'grid',
-                          placeItems: 'center',
-                          borderRadius: '14px',
-                          background: 'rgba(37,99,235,0.14)',
-                          color: '#bfdbfe',
-                        }}
-                      >
-                        <AppIcon name="shield" />
-                      </div>
-                      <div>
-                        <h2 style={{ margin: 0, color: '#f8fafc' }}>Seguridad y acceso</h2>
-                        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
-                          Gestiona tu contraseña, revisa tu sesión actual y cierra sesiones abiertas.
-                        </p>
-                      </div>
-                    </div>
+                <ConfigSectionAccordion
+                  icon="shield"
+                  title="Seguridad y acceso"
+                  description="Gestiona tu contraseña, revisa tu sesión actual y cierra sesiones abiertas."
+                  summaryValue={
+                    loadingSecurity
+                      ? 'Cargando...'
+                      : `${securityInfo?.activeSessions ?? 0} sesión${securityInfo?.activeSessions === 1 ? '' : 'es'}`
+                  }
+                  summaryValueStyle={{
+                    display: 'inline-block',
+                    padding: '7px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(59,130,246,0.16)',
+                    color: '#93c5fd',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                     <button type="button" onClick={() => void cargarSecurityInfo()} style={buttonSecondary}>
                       Actualizar seguridad
                     </button>
@@ -4585,31 +4681,16 @@ function App() {
                       </button>
                     </div>
                   </form>
-                </div>
+                </ConfigSectionAccordion>
 
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '42px',
-                          height: '42px',
-                          display: 'grid',
-                          placeItems: 'center',
-                          borderRadius: '14px',
-                          background: 'rgba(37,99,235,0.14)',
-                          color: '#bfdbfe',
-                        }}
-                      >
-                        <AppIcon name="dashboard" />
-                      </div>
-                      <div>
-                        <h2 style={{ margin: 0, color: '#f8fafc' }}>Estado operativo</h2>
-                        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
-                          Supervisa el backend, la cobranza y el último envío de prueba.
-                        </p>
-                      </div>
-                    </div>
+                <ConfigSectionAccordion
+                  icon="dashboard"
+                  title="Estado operativo"
+                  description="Supervisa el backend, la cobranza y el último envío de prueba."
+                  summaryValue={healthStatus?.dbOk ? 'Backend OK' : 'Backend falla'}
+                  summaryValueStyle={healthStatus?.dbOk ? badgeActive : badgeInactive}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                     <button type="button" onClick={retryAuthCheck} style={buttonSecondary}>
                       Actualizar estado
                     </button>
@@ -4689,46 +4770,30 @@ function App() {
                       </div>
                     </div>
                   </div>
-                </div>
+                </ConfigSectionAccordion>
 
                 {isAdmin && (
                   <>
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '42px',
-                          height: '42px',
-                          display: 'grid',
-                          placeItems: 'center',
-                          borderRadius: '14px',
-                          background: 'rgba(34,197,94,0.14)',
-                          color: '#86efac',
-                        }}
-                      >
-                        <AppIcon name="whatsapp" />
-                      </div>
-                      <div>
-                        <h2 style={{ margin: 0, color: '#f8fafc' }}>Configuración de WhatsApp</h2>
-                        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
-                          Administra el canal, ejecuta pruebas y lanza el envío manual de cobros.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={whatsAppConfig.enabled ? badgeActive : badgeInactive}>
-                        {whatsAppConfig.enabled ? 'ACTIVO' : 'INACTIVO'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleWhatsAppEnabled(!whatsAppConfig.enabled)}
-                        style={whatsAppConfig.enabled ? buttonInfo : buttonSecondary}
-                      >
-                        {whatsAppConfig.enabled ? 'Desactivar' : 'Activar'}
-                      </button>
-                    </div>
+                <ConfigSectionAccordion
+                  icon="whatsapp"
+                  title="Configuración de WhatsApp"
+                  description="Administra el canal, ejecuta pruebas y lanza el envío manual de cobros."
+                  defaultOpen
+                  iconBoxStyle={{
+                    background: 'rgba(34,197,94,0.14)',
+                    color: '#86efac',
+                  }}
+                  summaryValue={whatsAppConfig.enabled ? 'ACTIVO' : 'INACTIVO'}
+                  summaryValueStyle={whatsAppConfig.enabled ? badgeActive : badgeInactive}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleWhatsAppEnabled(!whatsAppConfig.enabled)}
+                      style={whatsAppConfig.enabled ? buttonInfo : buttonSecondary}
+                    >
+                      {whatsAppConfig.enabled ? 'Desactivar' : 'Activar'}
+                    </button>
                   </div>
 
                   <div
@@ -5091,37 +5156,31 @@ function App() {
                       </div>
                     </div>
                   </form>
-                </div>
+                </ConfigSectionAccordion>
 
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <div
-                        style={{
-                          width: '42px',
-                          height: '42px',
-                          display: 'grid',
-                          placeItems: 'center',
-                          borderRadius: '14px',
-                          background: 'rgba(37,99,235,0.14)',
-                          color: '#bfdbfe',
-                        }}
-                      >
-                        <AppIcon name="usuario" />
-                      </div>
-                      <div>
-                        <h2 style={{ margin: 0, color: '#f8fafc' }}>Usuarios y roles</h2>
-                        <p style={{ margin: '6px 0 0', color: '#94a3b8' }}>
-                          Crea operadores, define permisos y controla quién ingresa al sistema.
-                        </p>
-                      </div>
-                    </div>
-                    {editingUserId && (
+                <ConfigSectionAccordion
+                  icon="usuario"
+                  title="Usuarios y roles"
+                  description="Crea operadores, define permisos y controla quién ingresa al sistema."
+                  summaryValue={loadingUsers ? 'Cargando...' : `${users.length} usuario${users.length === 1 ? '' : 's'}`}
+                  summaryValueStyle={{
+                    display: 'inline-block',
+                    padding: '7px 12px',
+                    borderRadius: '10px',
+                    background: 'rgba(59,130,246,0.16)',
+                    color: '#93c5fd',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {editingUserId && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                       <button type="button" onClick={resetUserForm} style={buttonSecondary}>
                         Cancelar edición
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <div
                     style={{
@@ -5226,7 +5285,7 @@ function App() {
                       </table>
                     </div>
                   )}
-                </div>
+                </ConfigSectionAccordion>
                   </>
                 )}
               </div>
