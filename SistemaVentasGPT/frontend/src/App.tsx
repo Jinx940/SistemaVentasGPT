@@ -419,6 +419,110 @@ function getWhatsAppTestSuccessMessage(mode: WhatsAppTestFormState['mode']) {
   return 'Prueba hello_world enviada correctamente.'
 }
 
+const morososFabCss = String.raw`
+@keyframes morososFabPulse {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.5), 0 0 0 1px rgba(125, 211, 252, 0.08);
+  }
+  40% {
+    transform: translate3d(0, -2px, 0) scale(1.01);
+    box-shadow: 0 28px 58px rgba(29, 78, 216, 0.32), 0 0 0 1px rgba(125, 211, 252, 0.16);
+  }
+  65% {
+    transform: translate3d(0, 0, 0) scale(1);
+    box-shadow: 0 24px 48px rgba(2, 6, 23, 0.5), 0 0 0 1px rgba(125, 211, 252, 0.08);
+  }
+}
+
+@keyframes morososFabBell {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  8% {
+    transform: rotate(-12deg);
+  }
+  16% {
+    transform: rotate(10deg);
+  }
+  24% {
+    transform: rotate(-8deg);
+  }
+  32% {
+    transform: rotate(6deg);
+  }
+  40% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes morososFabHalo {
+  0%, 100% {
+    opacity: 0.42;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes morososFabBadge {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.08);
+  }
+  50% {
+    transform: scale(0.96);
+  }
+  75% {
+    transform: scale(1.05);
+  }
+}
+
+.morosos-fab {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.morosos-fab:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 32px 62px rgba(29, 78, 216, 0.26), 0 0 0 1px rgba(125, 211, 252, 0.18);
+}
+
+.morosos-fab:active {
+  transform: translateY(0);
+}
+
+.morosos-fab--alert {
+  animation: morososFabPulse 2.8s ease-in-out infinite;
+}
+
+.morosos-fab--alert .morosos-fab__icon {
+  animation: morososFabBell 2.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.morosos-fab--alert .morosos-fab__badge {
+  animation: morososFabBadge 2s ease-in-out infinite;
+}
+
+.morosos-fab--alert .morosos-fab__halo {
+  animation: morososFabHalo 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .morosos-fab,
+  .morosos-fab__icon,
+  .morosos-fab__badge,
+  .morosos-fab__halo {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+`
+
 type ConfigAccordionProps = {
   title: string
   description: string
@@ -559,6 +663,154 @@ function ConfigSectionAccordion({
         {children}
       </div>
     </details>
+  )
+}
+
+type FloatingMorososButtonProps = {
+  count: number
+  total: number
+  isMobile: boolean
+  onClick: () => void
+}
+
+function FloatingMorososButton({ count, total, isMobile, onClick }: FloatingMorososButtonProps) {
+  if (count <= 0) return null
+
+  const countLabel = count === 1 ? '1 moroso por cobrar' : `${count} morosos por cobrar`
+  const countBadge = count > 99 ? '99+' : String(count)
+  const amountLabel = formatCurrencyPen(total)
+
+  return (
+    <button
+      type="button"
+      className="morosos-fab morosos-fab--alert"
+      onClick={onClick}
+      title={`${countLabel}. ${amountLabel} pendientes.`}
+      aria-label={`${countLabel}. ${amountLabel} pendientes. Abrir centro de morosos.`}
+      style={{
+        position: 'fixed',
+        right: isMobile ? '14px' : '26px',
+        bottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom, 0px))' : '24px',
+        zIndex: 80,
+        width: isMobile ? '72px' : '290px',
+        maxWidth: isMobile ? '72px' : 'calc(100vw - 42px)',
+        minHeight: isMobile ? '72px' : '88px',
+        padding: isMobile ? '0' : '14px 16px 14px 14px',
+        borderRadius: isMobile ? '24px' : '26px',
+        border: '1px solid rgba(96,165,250,0.34)',
+        background:
+          'linear-gradient(135deg, rgba(8,15,36,0.98) 0%, rgba(17,24,39,0.96) 38%, rgba(29,78,216,0.9) 100%)',
+        color: '#eff6ff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: isMobile ? 'center' : 'flex-start',
+        gap: isMobile ? '0' : '14px',
+        cursor: 'pointer',
+        overflow: 'hidden',
+        backdropFilter: 'blur(18px)',
+        boxShadow: '0 24px 48px rgba(2,6,23,0.5), 0 0 0 1px rgba(125,211,252,0.08)',
+      }}
+    >
+      <span
+        className="morosos-fab__halo"
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: '-35%',
+          background:
+            'radial-gradient(circle at 35% 35%, rgba(125,211,252,0.28), transparent 34%), radial-gradient(circle at 75% 25%, rgba(244,114,182,0.12), transparent 26%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <span
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          width: isMobile ? '52px' : '56px',
+          height: isMobile ? '52px' : '56px',
+          borderRadius: '18px',
+          display: 'grid',
+          placeItems: 'center',
+          background: 'linear-gradient(180deg, rgba(59,130,246,0.28), rgba(30,41,59,0.2))',
+          border: '1px solid rgba(191,219,254,0.18)',
+          color: '#e0f2fe',
+          flexShrink: 0,
+        }}
+      >
+        <span className="morosos-fab__icon" style={{ display: 'inline-flex' }}>
+          <AppIcon name="bell" size={isMobile ? 22 : 20} />
+        </span>
+
+        <span
+          className="morosos-fab__badge"
+          style={{
+            position: 'absolute',
+            top: '-6px',
+            right: '-6px',
+            minWidth: '28px',
+            height: '28px',
+            padding: '0 8px',
+            borderRadius: '999px',
+            background: 'linear-gradient(135deg, #fb7185, #f43f5e)',
+            color: '#fff1f2',
+            border: '2px solid rgba(8,15,36,0.92)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '12px',
+            fontWeight: 800,
+            boxSizing: 'border-box',
+          }}
+        >
+          {countBadge}
+        </span>
+      </span>
+
+      {!isMobile && (
+        <span
+          style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'grid',
+            gap: '4px',
+            textAlign: 'left',
+            minWidth: 0,
+          }}
+        >
+          <span
+            style={{
+              color: '#bfdbfe',
+              fontSize: '11px',
+              fontWeight: 800,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Aviso de cobro
+          </span>
+          <span
+            style={{
+              color: '#f8fafc',
+              fontSize: '17px',
+              fontWeight: 800,
+              lineHeight: 1.15,
+            }}
+          >
+            {countLabel}
+          </span>
+          <span
+            style={{
+              color: '#dbeafe',
+              fontSize: '13px',
+              lineHeight: 1.35,
+            }}
+          >
+            {amountLabel} pendientes. Toca para revisar.
+          </span>
+        </span>
+      )}
+    </button>
   )
 }
 
@@ -2817,6 +3069,20 @@ function App() {
 
   const dueTodayRows = useMemo(() => dashboardResumen?.dueTodayRows ?? [], [dashboardResumen])
   const overdueRows = useMemo(() => dashboardResumen?.overdueRows ?? [], [dashboardResumen])
+  const morososPendientesCount = useMemo(() => {
+    const ids = new Set<number | string>()
+    overdueRows.forEach((venta) => {
+      ids.add(venta.cliente?.id ?? venta.clienteId ?? `venta-${venta.id}`)
+    })
+    return ids.size
+  }, [overdueRows])
+  const morososPendientesMonto = useMemo(() => {
+    return overdueRows.reduce((sum, venta) => {
+      const monto = Number(venta.monto || 0)
+      const descuento = Number(venta.descuento || 0)
+      return sum + Math.max(0, monto - descuento)
+    }, 0)
+  }, [overdueRows])
 
   const estadoChartData = useMemo(
     () => [
@@ -3283,6 +3549,8 @@ function App() {
         color: '#e5e7eb',
       }}
     >
+      <style>{morososFabCss}</style>
+
       <div style={{ width: '100%', maxWidth: 'none', margin: 0 }}>
         <div
           style={{
@@ -6676,6 +6944,18 @@ function App() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {activeTab !== 'morosos' && (
+              <FloatingMorososButton
+                count={morososPendientesCount}
+                total={morososPendientesMonto}
+                isMobile={isMobile}
+                onClick={() => {
+                  handleTabSelect('morosos')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+              />
             )}
           </main>
         </div>
