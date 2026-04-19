@@ -3,6 +3,7 @@ import type { ActividadSistema, HistorialBaja, Pago, PagoResumenResponse, WhatsA
 import { formatCurrencyPen, formatDateDisplay, normalizeText } from '../utils/ui'
 import { DashboardMiniStat } from './dashboard'
 import { AppIcon } from './icons'
+import { SectionAccordion } from './section-accordion'
 
 type HistorySectionProps = {
   isAdmin: boolean
@@ -209,8 +210,12 @@ export function HistorySection({
         )}
       </div>
 
-      <div style={sectionCardStyle()}>
-        {card('Historial de bajas', 'historial')}
+      <SectionAccordion
+        icon="historial"
+        title="Historial de bajas"
+        description="Consulta clientes dados de baja y revisa el detalle registrado en cada salida."
+        summaryValue={`${historialBajas.length} registro${historialBajas.length === 1 ? '' : 's'}`}
+      >
         {loadingHistorial ? (
           <EmptyText text="Cargando historial..." />
         ) : historialBajas.length === 0 ? (
@@ -241,10 +246,14 @@ export function HistorySection({
             </table>
           </div>
         )}
-      </div>
+      </SectionAccordion>
 
-      <div style={sectionCardStyle()}>
-        {card('Historial de pagos', 'pago')}
+      <SectionAccordion
+        icon="pago"
+        title="Historial de pagos"
+        description="Revisa los cobros registrados, quién los guardó y el estado actual de cada venta."
+        summaryValue={`${pagos.length} pago${pagos.length === 1 ? '' : 's'}`}
+      >
         {loadingPagos ? (
           <EmptyText text="Cargando pagos..." />
         ) : pagos.length === 0 ? (
@@ -285,10 +294,14 @@ export function HistorySection({
             </table>
           </div>
         )}
-      </div>
+      </SectionAccordion>
 
-      <div style={sectionCardStyle()}>
-        {card('Actividad reciente', 'dashboard')}
+      <SectionAccordion
+        icon="dashboard"
+        title="Actividad reciente"
+        description="Muestra las acciones recientes del sistema para seguir cambios importantes y auditoría."
+        summaryValue={`${actividad.length} evento${actividad.length === 1 ? '' : 's'}`}
+      >
         {loadingActividad ? (
           <EmptyText text="Cargando actividad..." />
         ) : actividad.length === 0 ? (
@@ -324,10 +337,14 @@ export function HistorySection({
             </table>
           </div>
         )}
-      </div>
+      </SectionAccordion>
 
-      <div style={sectionCardStyle()}>
-        {card('Logs de WhatsApp', 'whatsapp')}
+      <SectionAccordion
+        icon="whatsapp"
+        title="Logs de WhatsApp"
+        description="Centraliza el histórico de envíos, errores y estados del canal de WhatsApp."
+        summaryValue={`${whatsAppLogs.length} log${whatsAppLogs.length === 1 ? '' : 's'}`}
+      >
         {loadingWhatsAppLogs ? (
           <EmptyText text="Cargando logs..." />
         ) : whatsAppLogs.length === 0 ? (
@@ -362,7 +379,7 @@ export function HistorySection({
             </table>
           </div>
         )}
-      </div>
+      </SectionAccordion>
     </div>
   )
 }

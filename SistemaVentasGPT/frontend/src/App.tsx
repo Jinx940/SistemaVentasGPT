@@ -77,6 +77,7 @@ import {
   StatCard,
 } from './components/dashboard'
 import { HistorySection } from './components/history-section'
+import { SectionAccordion } from './components/section-accordion'
 import { SidebarNav } from './components/sidebar'
 import { AuthCard } from './components/auth-card'
 import { AppIcon } from './components/icons'
@@ -3990,9 +3991,13 @@ function App() {
                   </form>
                 </div>
 
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <h2 style={{ margin: 0, color: '#f8fafc' }}>Listado de clientes</h2>
+                <SectionAccordion
+                  icon="clientes"
+                  title="Listado de clientes"
+                  description="Consulta rápidamente el padrón completo, la deuda acumulada y los accesos de cada cliente."
+                  summaryValue={`${clientes.length} cliente${clientes.length === 1 ? '' : 's'}`}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                     <input
                       placeholder="Buscar cliente..."
                       value={searchCliente}
@@ -4072,7 +4077,7 @@ function App() {
                       </table>
                     </div>
                   )}
-                </div>
+                </SectionAccordion>
               </div>
             )}
 
@@ -4139,9 +4144,13 @@ function App() {
                   </form>
                 </div>
 
-                <div style={cardStyle}>
-                  <div style={headerRowStyle}>
-                    <h2 style={{ margin: 0, color: '#f8fafc' }}>Listado de cuentas</h2>
+                <SectionAccordion
+                  icon="cuentas"
+                  title="Listado de cuentas"
+                  description="Revisa capacidad, ocupación y estado de las cuentas antes de asignar nuevas ventas."
+                  summaryValue={`${cuentas.length} cuenta${cuentas.length === 1 ? '' : 's'}`}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                     <input
                       placeholder="Buscar cuenta..."
                       value={searchCuenta}
@@ -4242,7 +4251,7 @@ function App() {
                       </table>
                     </div>
                   )}
-                </div>
+                </SectionAccordion>
               </div>
             )}
 
