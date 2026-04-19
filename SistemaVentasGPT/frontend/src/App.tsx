@@ -4215,6 +4215,7 @@ function App() {
                   icon="clientes"
                   title="Listado de clientes"
                   description="Consulta rápidamente el padrón completo, la deuda acumulada y los accesos de cada cliente."
+                  defaultOpen
                   summaryValue={`${clientes.length} cliente${clientes.length === 1 ? '' : 's'}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
@@ -4247,7 +4248,7 @@ function App() {
                   {loadingClientes ? (
                     <p>Cargando clientes...</p>
                   ) : clientesFiltrados.length === 0 ? (
-                    <p>No hay clientes registrados.</p>
+                    <p>No hay clientes registrados todavía. Cuando guardes uno, aquí aparecerán las acciones `Editar` y `Eliminar`.</p>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
