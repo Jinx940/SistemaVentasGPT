@@ -167,6 +167,12 @@ type VentaStepErrors = {
   step4: string[]
 }
 
+type VentaDraftSnapshot = {
+  form: VentaFormState
+  telefonoPais: string
+  ventaFechaCierreAuto: boolean
+}
+
 type VentasMetaState = Omit<VentasResponse, 'items'>
 
 type AuthFormState = {
@@ -362,6 +368,48 @@ const emptyPagoResumen: PagoResumenResponse = {
   clientesConDeuda: 0,
   ticketPromedio: 0,
   topDeudores: [],
+}
+
+const defaultWhatsAppConfig: WhatsAppConfig = {
+  enabled: false,
+  graphVersion: 'v25.0',
+  phoneNumberId: '977660538773451',
+  webhookUrl: 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp',
+  webhookVerifyToken: 'sistema-cobro-whatsapp',
+  notifyPhone: '989267132',
+  replyAlertTemplateName: 'gpt_alerta_respuesta',
+  replyAlertLangCode: 'es_PE',
+  templateName: 'gpt_vence_hoy',
+  langCode: 'es_PE',
+  dueTodayTemplateName: 'gpt_vence_hoy',
+  dueTodayLangCode: 'es_PE',
+  dueTomorrowTemplateName: 'gpt_vence_manana',
+  dueTomorrowLangCode: 'es_PE',
+  overdueTemplateName: 'gpt_plus_vencido',
+  overdueLangCode: 'es_PE',
+  accessUpdateTemplateName: '',
+  accessUpdateLangCode: 'es_PE',
+  serviceResumeDate: '01/03',
+  paymentMethods: 'Yape / Plin',
+  paymentPhone: '950275766',
+  paymentContactName: 'Jesus Dominguez',
+  hasToken: false,
+}
+
+function createVentaDraftSnapshot(
+  form: VentaFormState,
+  telefonoPais: string,
+  ventaFechaCierreAuto: boolean,
+): VentaDraftSnapshot {
+  return {
+    form: { ...form },
+    telefonoPais,
+    ventaFechaCierreAuto,
+  }
+}
+
+function areDraftsEqual<T>(left: T, right: T) {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 const defaultPhoneCountry = PHONE_COUNTRIES[0]
@@ -689,22 +737,20 @@ function FloatingMorososButton({ count, total, isMobile, onClick }: FloatingMoro
       aria-label={`${countLabel}. ${amountLabel} pendientes. Abrir centro de morosos.`}
       style={{
         position: 'fixed',
-        right: isMobile ? '14px' : '26px',
-        bottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom, 0px))' : '24px',
+        right: isMobile ? '14px' : '24px',
+        bottom: isMobile ? 'calc(16px + env(safe-area-inset-bottom, 0px))' : '22px',
         zIndex: 80,
-        width: isMobile ? '72px' : '290px',
-        maxWidth: isMobile ? '72px' : 'calc(100vw - 42px)',
-        minHeight: isMobile ? '72px' : '88px',
-        padding: isMobile ? '0' : '14px 16px 14px 14px',
-        borderRadius: isMobile ? '24px' : '26px',
+        width: isMobile ? '62px' : '68px',
+        height: isMobile ? '62px' : '68px',
+        padding: '0',
+        borderRadius: '22px',
         border: '1px solid rgba(96,165,250,0.34)',
         background:
           'linear-gradient(135deg, rgba(8,15,36,0.98) 0%, rgba(17,24,39,0.96) 38%, rgba(29,78,216,0.9) 100%)',
         color: '#eff6ff',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: isMobile ? 'center' : 'flex-start',
-        gap: isMobile ? '0' : '14px',
+        justifyContent: 'center',
         cursor: 'pointer',
         overflow: 'hidden',
         backdropFilter: 'blur(18px)',
@@ -727,8 +773,8 @@ function FloatingMorososButton({ count, total, isMobile, onClick }: FloatingMoro
         style={{
           position: 'relative',
           zIndex: 1,
-          width: isMobile ? '52px' : '56px',
-          height: isMobile ? '52px' : '56px',
+          width: isMobile ? '48px' : '52px',
+          height: isMobile ? '48px' : '52px',
           borderRadius: '18px',
           display: 'grid',
           placeItems: 'center',
@@ -766,50 +812,6 @@ function FloatingMorososButton({ count, total, isMobile, onClick }: FloatingMoro
           {countBadge}
         </span>
       </span>
-
-      {!isMobile && (
-        <span
-          style={{
-            position: 'relative',
-            zIndex: 1,
-            display: 'grid',
-            gap: '4px',
-            textAlign: 'left',
-            minWidth: 0,
-          }}
-        >
-          <span
-            style={{
-              color: '#bfdbfe',
-              fontSize: '11px',
-              fontWeight: 800,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Aviso de cobro
-          </span>
-          <span
-            style={{
-              color: '#f8fafc',
-              fontSize: '17px',
-              fontWeight: 800,
-              lineHeight: 1.15,
-            }}
-          >
-            {countLabel}
-          </span>
-          <span
-            style={{
-              color: '#dbeafe',
-              fontSize: '13px',
-              lineHeight: 1.35,
-            }}
-          >
-            {amountLabel} pendientes. Toca para revisar.
-          </span>
-        </span>
-      )}
     </button>
   )
 }
@@ -1145,44 +1147,27 @@ function App() {
   const [success, setSuccess] = useState('')
 
   const [clienteForm, setClienteForm] = useState(emptyClienteForm)
+  const [clienteFormBaseline, setClienteFormBaseline] = useState<ClienteFormState>(emptyClienteForm)
   const [cuentaForm, setCuentaForm] = useState(emptyCuentaForm)
+  const [cuentaFormBaseline, setCuentaFormBaseline] = useState<CuentaFormState>(emptyCuentaForm)
   const [ventaForm, setVentaForm] = useState(emptyVentaForm)
+  const [ventaDraftBaseline, setVentaDraftBaseline] = useState<VentaDraftSnapshot>(() =>
+    createVentaDraftSnapshot(emptyVentaForm, defaultPhoneCountry.dialCode, true),
+  )
   const [ventaFormStep, setVentaFormStep] = useState<1 | 2 | 3 | 4>(1)
   const [ventaValidationStep, setVentaValidationStep] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [telefonoPais, setTelefonoPais] = useState(defaultPhoneCountry.dialCode)
   const [ventaFechaCierreAuto, setVentaFechaCierreAuto] = useState(true)
 
-  const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppConfig>({
-    enabled: false,
-    graphVersion: 'v25.0',
-    phoneNumberId: '977660538773451',
-    webhookUrl: 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp',
-    webhookVerifyToken: 'sistema-cobro-whatsapp',
-    notifyPhone: '989267132',
-    replyAlertTemplateName: 'gpt_alerta_respuesta',
-    replyAlertLangCode: 'es_PE',
-    templateName: 'gpt_vence_hoy',
-    langCode: 'es_PE',
-    dueTodayTemplateName: 'gpt_vence_hoy',
-    dueTodayLangCode: 'es_PE',
-    dueTomorrowTemplateName: 'gpt_vence_manana',
-    dueTomorrowLangCode: 'es_PE',
-    overdueTemplateName: 'gpt_plus_vencido',
-    overdueLangCode: 'es_PE',
-    accessUpdateTemplateName: '',
-    accessUpdateLangCode: 'es_PE',
-    serviceResumeDate: '01/03',
-    paymentMethods: 'Yape / Plin',
-    paymentPhone: '950275766',
-    paymentContactName: 'Jesus Dominguez',
-    hasToken: false,
-  })
+  const [whatsAppConfig, setWhatsAppConfig] = useState<WhatsAppConfig>(defaultWhatsAppConfig)
+  const [whatsAppConfigBaseline, setWhatsAppConfigBaseline] = useState<WhatsAppConfig>(defaultWhatsAppConfig)
 
   const [whatsAppTokenInput, setWhatsAppTokenInput] = useState('')
   const [whatsAppTestForm, setWhatsAppTestForm] = useState<WhatsAppTestFormState>(emptyWhatsAppTestForm)
   const [selectedWhatsAppChatPhone, setSelectedWhatsAppChatPhone] = useState('')
   const [whatsAppReplyText, setWhatsAppReplyText] = useState('')
   const [sendingWhatsAppReply, setSendingWhatsAppReply] = useState(false)
+  const [userFormBaseline, setUserFormBaseline] = useState<UserFormState>(emptyUserForm)
   const [editingClienteId, setEditingClienteId] = useState<number | null>(null)
   const [editingCuentaId, setEditingCuentaId] = useState<number | null>(null)
   const [editingVentaId, setEditingVentaId] = useState<number | null>(null)
@@ -1253,6 +1238,89 @@ function App() {
     if (!clienteId) return null
     return clientes.find((cliente) => cliente.id === clienteId) || null
   }, [clientes, ventaForm.clienteId])
+
+  const clienteFormDirty = useMemo(
+    () => !areDraftsEqual(clienteForm, clienteFormBaseline),
+    [clienteForm, clienteFormBaseline],
+  )
+  const cuentaFormDirty = useMemo(
+    () => !areDraftsEqual(cuentaForm, cuentaFormBaseline),
+    [cuentaForm, cuentaFormBaseline],
+  )
+  const ventaDraftDirty = useMemo(
+    () =>
+      !areDraftsEqual(
+        createVentaDraftSnapshot(ventaForm, telefonoPais, ventaFechaCierreAuto),
+        ventaDraftBaseline,
+      ),
+    [telefonoPais, ventaDraftBaseline, ventaFechaCierreAuto, ventaForm],
+  )
+  const userFormDirty = useMemo(
+    () => !areDraftsEqual(userForm, userFormBaseline),
+    [userForm, userFormBaseline],
+  )
+  const passwordFormDirty = useMemo(
+    () => !areDraftsEqual(passwordForm, emptyPasswordForm),
+    [passwordForm],
+  )
+  const whatsAppConfigDirty = useMemo(
+    () =>
+      !areDraftsEqual(whatsAppConfig, whatsAppConfigBaseline) || Boolean(whatsAppTokenInput.trim()),
+    [whatsAppConfig, whatsAppConfigBaseline, whatsAppTokenInput],
+  )
+  const currentUnsavedDraft = useMemo(() => {
+    if (activeTab === 'clientes' && clienteFormDirty) {
+      return { label: editingClienteId ? 'la edición del cliente' : 'el registro del cliente' }
+    }
+
+    if (activeTab === 'cuentas' && cuentaFormDirty) {
+      return { label: editingCuentaId ? 'la edición de la cuenta' : 'el registro de la cuenta' }
+    }
+
+    if (activeTab === 'registro' && ventaDraftDirty) {
+      return { label: editingVentaId ? 'la edición de la venta' : 'el registro de la venta' }
+    }
+
+    if (activeTab === 'configuracion') {
+      if (passwordFormDirty) {
+        return { label: 'la actualización de seguridad' }
+      }
+
+      if (userFormDirty) {
+        return { label: editingUserId ? 'la edición del usuario' : 'la creación del usuario' }
+      }
+
+      if (whatsAppConfigDirty) {
+        return { label: 'la configuración de WhatsApp' }
+      }
+    }
+
+    return null
+  }, [
+    activeTab,
+    clienteFormDirty,
+    cuentaFormDirty,
+    editingClienteId,
+    editingCuentaId,
+    editingUserId,
+    editingVentaId,
+    passwordFormDirty,
+    userFormDirty,
+    ventaDraftDirty,
+    whatsAppConfigDirty,
+  ])
+
+  useEffect(() => {
+    if (!currentUser || !currentUnsavedDraft) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [currentUnsavedDraft, currentUser])
 
   async function cargarClientes() {
     try {
@@ -1480,6 +1548,7 @@ function App() {
     try {
       const data = await getWhatsAppConfig()
       setWhatsAppConfig(data)
+      setWhatsAppConfigBaseline(data)
     } catch (error) {
       setError(getErrorMessage(error, 'Error cargando configuración de WhatsApp.'))
     }
@@ -1556,6 +1625,22 @@ function App() {
         lastRestoredAt: null,
       })
       setPasswordForm(emptyPasswordForm)
+      setClienteForm(emptyClienteForm)
+      setClienteFormBaseline(emptyClienteForm)
+      setCuentaForm(emptyCuentaForm)
+      setCuentaFormBaseline(emptyCuentaForm)
+      setVentaForm(emptyVentaForm)
+      setVentaDraftBaseline(createVentaDraftSnapshot(emptyVentaForm, defaultPhoneCountry.dialCode, true))
+      setVentaFormStep(1)
+      setVentaValidationStep(0)
+      setTelefonoPais(defaultPhoneCountry.dialCode)
+      setVentaFechaCierreAuto(true)
+      setSearchVentaCliente('')
+      setUserForm(emptyUserForm)
+      setUserFormBaseline(emptyUserForm)
+      setWhatsAppConfig(defaultWhatsAppConfig)
+      setWhatsAppConfigBaseline(defaultWhatsAppConfig)
+      setWhatsAppTokenInput('')
       if (showMessage) {
         setSuccess('Sesión cerrada correctamente.')
       }
@@ -1805,10 +1890,13 @@ function App() {
           const usersData = protectedData[10] as UsuarioSistema[]
           const backupsData = protectedData[11] as SystemBackupListResponse
           setWhatsAppConfig(configData)
+          setWhatsAppConfigBaseline(configData)
           setUsers(usersData)
           setBackupInfo(backupsData)
         } else {
           setUsers([])
+          setWhatsAppConfig(defaultWhatsAppConfig)
+          setWhatsAppConfigBaseline(defaultWhatsAppConfig)
           setBackupInfo({
             items: [],
             autoEnabled: true,
@@ -1993,6 +2081,7 @@ function App() {
 
   function resetUserForm() {
     setUserForm(emptyUserForm)
+    setUserFormBaseline(emptyUserForm)
     setEditingUserId(null)
   }
 
@@ -2257,16 +2346,19 @@ function App() {
 
   function resetClienteForm() {
     setClienteForm(emptyClienteForm)
+    setClienteFormBaseline(emptyClienteForm)
     setEditingClienteId(null)
   }
 
   function resetCuentaForm() {
     setCuentaForm(emptyCuentaForm)
+    setCuentaFormBaseline(emptyCuentaForm)
     setEditingCuentaId(null)
   }
 
   function resetVentaForm() {
     setVentaForm(emptyVentaForm)
+    setVentaDraftBaseline(createVentaDraftSnapshot(emptyVentaForm, defaultPhoneCountry.dialCode, true))
     setEditingVentaId(null)
     setVentaFormStep(1)
     setVentaValidationStep(0)
@@ -2509,28 +2601,32 @@ function App() {
   function editarCliente(cliente: Cliente) {
     limpiarMensajes()
     setEditingClienteId(cliente.id)
-    setClienteForm({
+    const nextForm = {
       nombre: cliente.nombre || '',
       telefono: cliente.telefono || '',
       monto: String(cliente.monto ?? ''),
       carpeta: cliente.carpeta || '',
       observacion: cliente.observacion || '',
-    })
-    setActiveTab('clientes')
+    }
+    setClienteForm(nextForm)
+    setClienteFormBaseline(nextForm)
+    handleTabSelect('clientes')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function editarCuenta(cuenta: CuentaAcceso) {
     limpiarMensajes()
     setEditingCuentaId(cuenta.id)
-    setCuentaForm({
+    const nextForm = {
       correo: cuenta.correo || '',
       password: '',
       capacidad: String(cuenta.capacidad || 20),
       activa: cuenta.activa ? 'true' : 'false',
       observacion: cuenta.observacion || '',
-    })
-    setActiveTab('cuentas')
+    }
+    setCuentaForm(nextForm)
+    setCuentaFormBaseline(nextForm)
+    handleTabSelect('cuentas')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -2545,7 +2641,7 @@ function App() {
     setEditingVentaId(venta.id)
     const fechaInicio = toInputDate(venta.fechaInicio)
     const fechaCierre = toInputDate(venta.fechaCierre)
-    setVentaForm({
+    const nextForm: VentaFormState = {
       clienteId: String(venta.clienteId || ''),
       cliente: venta.cliente?.nombre || '',
       telefono: phone.local || '',
@@ -2563,12 +2659,20 @@ function App() {
       observacion: String(venta.observacion ?? ''),
       assignmentMode: venta.cuentaAccesoId ? 'manual' : 'auto',
       cuentaAccesoId: venta.cuentaAccesoId ? String(venta.cuentaAccesoId) : '',
-    })
+    }
+    setVentaForm(nextForm)
+    setVentaDraftBaseline(
+      createVentaDraftSnapshot(
+        nextForm,
+        phone.dialCode,
+        !!fechaInicio && !!fechaCierre && addMonthsToInputDate(fechaInicio, 1) === fechaCierre,
+      ),
+    )
     setVentaFormStep(1)
     setVentaValidationStep(0)
     setVentaFechaCierreAuto(!!fechaInicio && !!fechaCierre && addMonthsToInputDate(fechaInicio, 1) === fechaCierre)
     setSearchVentaCliente('')
-    setActiveTab('registro')
+    handleTabSelect('registro')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -2799,6 +2903,7 @@ function App() {
           await setWhatsAppEnabled(enabled)
 
           setWhatsAppConfig((prev) => ({ ...prev, enabled }))
+          setWhatsAppConfigBaseline((prev) => ({ ...prev, enabled }))
           setSuccess(enabled ? 'WhatsApp activado.' : 'WhatsApp desactivado.')
           await cargarActividad()
         } catch (error) {
@@ -2976,14 +3081,16 @@ function App() {
   function editarUsuario(usuario: UsuarioSistema) {
     limpiarMensajes()
     setEditingUserId(usuario.id)
-    setUserForm({
+    const nextForm = {
       nombre: usuario.nombre,
       correo: usuario.correo,
       password: '',
       rol: usuario.rol,
       activo: usuario.activo,
-    })
-    setActiveTab('configuracion')
+    }
+    setUserForm(nextForm)
+    setUserFormBaseline(nextForm)
+    handleTabSelect('configuracion')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -3407,10 +3514,32 @@ function App() {
   )
 
   function handleTabSelect(key: TabKey) {
-    setActiveTab(key)
-    if (isMobile) {
-      setMobileNavOpen(false)
+    if (key === activeTab) {
+      if (isMobile) {
+        setMobileNavOpen(false)
+      }
+      return
     }
+
+    const goToTab = () => {
+      setActiveTab(key)
+      if (isMobile) {
+        setMobileNavOpen(false)
+      }
+    }
+
+    if (!currentUnsavedDraft) {
+      goToTab()
+      return
+    }
+
+    openConfirmModal({
+      title: 'Cambios sin guardar',
+      message: `Tienes cambios sin guardar en ${currentUnsavedDraft.label}. Si sales ahora, perderás lo que estabas escribiendo.`,
+      type: 'warning',
+      confirmText: 'Salir',
+      onConfirm: goToTab,
+    })
   }
 
   if (!authReady) {
@@ -4285,7 +4414,7 @@ function App() {
                                           <button
                                             type="button"
                                             onClick={() => {
-                                              setActiveTab('clientes')
+                                              handleTabSelect('clientes')
                                               window.scrollTo({ top: 0, behavior: 'smooth' })
                                             }}
                                             style={buttonSecondary}
