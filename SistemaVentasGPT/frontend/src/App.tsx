@@ -552,6 +552,7 @@ type VentaFormStepCardProps = {
   step: string
   title: string
   description: string
+  wizardMode?: boolean
   open: boolean
   enabled?: boolean
   statusLabel?: string
@@ -564,6 +565,7 @@ function VentaFormStepCard({
   step,
   title,
   description,
+  wizardMode = false,
   open,
   enabled = true,
   statusLabel,
@@ -581,85 +583,141 @@ function VentaFormStepCard({
         opacity: enabled ? 1 : 0.72,
       }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={!enabled}
-        style={{
-          width: '100%',
-          border: 'none',
-          background: 'transparent',
-          padding: '18px',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: '14px',
-          textAlign: 'left',
-          cursor: enabled ? 'pointer' : 'not-allowed',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+      {wizardMode ? (
+        <div
+          style={{
+            padding: '18px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: '34px',
+                height: '34px',
+                padding: '0 10px',
+                borderRadius: '999px',
+                background: 'rgba(59,130,246,0.22)',
+                color: '#93c5fd',
+                fontSize: '13px',
+                fontWeight: 800,
+                flexShrink: 0,
+              }}
+            >
+              Paso {step}
+            </span>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
+                {statusLabel ? (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      background: 'rgba(59,130,246,0.16)',
+                      color: '#93c5fd',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {statusLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={!enabled}
+          style={{
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            padding: '18px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '14px',
+            textAlign: 'left',
+            cursor: enabled ? 'pointer' : 'not-allowed',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: '34px',
+                height: '34px',
+                padding: '0 10px',
+                borderRadius: '999px',
+                background: open ? 'rgba(59,130,246,0.22)' : 'rgba(37,99,235,0.16)',
+                color: '#93c5fd',
+                fontSize: '13px',
+                fontWeight: 800,
+                flexShrink: 0,
+              }}
+            >
+              Paso {step}
+            </span>
+
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
+                {statusLabel ? (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '4px 10px',
+                      borderRadius: '999px',
+                      background: open ? 'rgba(59,130,246,0.16)' : 'rgba(148,163,184,0.12)',
+                      color: open ? '#93c5fd' : '#cbd5e1',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {statusLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
+            </div>
+          </div>
+
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              minWidth: '34px',
+              minWidth: '38px',
               height: '34px',
-              padding: '0 10px',
-              borderRadius: '999px',
-              background: open ? 'rgba(59,130,246,0.22)' : 'rgba(37,99,235,0.16)',
-              color: '#93c5fd',
-              fontSize: '13px',
-              fontWeight: 800,
+              borderRadius: '10px',
+              background: 'rgba(15,23,42,0.9)',
+              color: '#cbd5e1',
+              fontSize: '18px',
+              fontWeight: 700,
               flexShrink: 0,
             }}
           >
-            Paso {step}
+            {open ? '-' : '+'}
           </span>
-
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
-              {statusLabel ? (
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '4px 10px',
-                    borderRadius: '999px',
-                    background: open ? 'rgba(59,130,246,0.16)' : 'rgba(148,163,184,0.12)',
-                    color: open ? '#93c5fd' : '#cbd5e1',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                  }}
-                >
-                  {statusLabel}
-                </span>
-              ) : null}
-            </div>
-            <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
-          </div>
-        </div>
-
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minWidth: '38px',
-            height: '34px',
-            borderRadius: '10px',
-            background: 'rgba(15,23,42,0.9)',
-            color: '#cbd5e1',
-            fontSize: '18px',
-            fontWeight: 700,
-            flexShrink: 0,
-          }}
-        >
-          {open ? '-' : '+'}
-        </span>
-      </button>
+        </button>
+      )}
 
       {open ? (
         <div
@@ -3476,69 +3534,71 @@ function App() {
                           <div style={{ display: 'grid', gap: '18px' }}>
                             <div
                               style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                                gap: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                                flexWrap: 'wrap',
+                                padding: '14px 16px',
+                                borderRadius: '14px',
+                                border: '1px solid rgba(51,65,85,0.9)',
+                                background: 'rgba(2,6,23,0.22)',
                               }}
                             >
-                              {[
-                                { step: 1, title: 'Cliente', complete: ventaStep1Complete, enabled: true },
-                                { step: 2, title: 'Cobro', complete: ventaStep2Complete, enabled: ventaMaxEnabledStep >= 2 },
-                                { step: 3, title: 'Dispositivos', complete: ventaStep3Complete, enabled: ventaMaxEnabledStep >= 3 },
-                                { step: 4, title: 'Cuenta', complete: ventaStep4Complete, enabled: ventaMaxEnabledStep >= 4 },
-                              ].map((item) => (
-                                <button
-                                  key={item.step}
-                                  type="button"
-                                  onClick={() => item.enabled && setVentaFormStep(item.step as 1 | 2 | 3 | 4)}
-                                  disabled={!item.enabled}
-                                  style={{
-                                    textAlign: 'left',
-                                    border: '1px solid rgba(51,65,85,0.9)',
-                                    borderRadius: '12px',
-                                    background:
-                                      ventaFormStep === item.step
-                                        ? 'rgba(37,99,235,0.16)'
-                                        : 'rgba(2,6,23,0.22)',
-                                    padding: '12px 14px',
-                                    cursor: item.enabled ? 'pointer' : 'not-allowed',
-                                    opacity: item.enabled ? 1 : 0.65,
-                                    color: '#f8fafc',
-                                  }}
-                                >
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'flex-start' }}>
-                                    <div>
-                                      <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800 }}>Paso {item.step}</div>
-                                      <div style={{ color: '#f8fafc', fontWeight: 700, marginTop: '4px' }}>{item.title}</div>
-                                    </div>
-                                    <span
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        padding: '4px 8px',
-                                        borderRadius: '999px',
-                                        background: item.complete ? 'rgba(34,197,94,0.16)' : 'rgba(148,163,184,0.12)',
-                                        color: item.complete ? '#86efac' : '#cbd5e1',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {item.complete ? 'Listo' : ventaFormStep === item.step ? 'Abierto' : 'Pendiente'}
-                                    </span>
-                                  </div>
-                                </button>
-                              ))}
+                              <div>
+                                <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800 }}>
+                                  Paso {ventaFormStep} de 4
+                                </div>
+                                <div style={{ color: '#f8fafc', fontWeight: 700, marginTop: '4px' }}>
+                                  {ventaFormStep === 1
+                                    ? 'Cliente'
+                                    : ventaFormStep === 2
+                                      ? 'Cobro'
+                                      : ventaFormStep === 3
+                                        ? 'Dispositivos'
+                                        : 'Cuenta'}
+                                </div>
+                              </div>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '6px 10px',
+                                  borderRadius: '999px',
+                                  background: 'rgba(59,130,246,0.16)',
+                                  color: '#93c5fd',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {ventaFormStep === 1
+                                  ? ventaStep1Complete
+                                    ? 'Listo para avanzar'
+                                    : 'Completa este paso'
+                                  : ventaFormStep === 2
+                                    ? ventaStep2Complete
+                                      ? 'Listo para avanzar'
+                                      : 'Completa este paso'
+                                    : ventaFormStep === 3
+                                      ? ventaStep3Complete
+                                        ? 'Listo para avanzar'
+                                        : 'Completa este paso'
+                                      : ventaStep4Complete
+                                        ? 'Listo para guardar'
+                                        : 'Revisa la cuenta'}
+                              </span>
                             </div>
 
+                            {ventaFormStep === 1 && (
                             <VentaFormStepCard
                               step="1"
                               title="Cliente y contacto"
                               description="Primero identifica al cliente. Si el teléfono ya existe, el sistema completa los datos conocidos."
-                              open={ventaFormStep === 1}
+                              wizardMode
+                              open
                               enabled
                               statusLabel={ventaStep1Complete ? 'Listo para continuar' : 'Completa este paso'}
-                              onToggle={() => setVentaFormStep(1)}
+                              onToggle={() => {}}
                               footer={
                                 <>
                                   <span style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
@@ -3646,17 +3706,18 @@ function App() {
                                 </div>
                               </div>
                             </VentaFormStepCard>
+                            )}
 
+                            {ventaFormStep === 2 && (
                             <VentaFormStepCard
                               step="2"
                               title="Periodo y cobro"
                               description="Luego define el periodo, el monto y si el pago de este mes ya fue recibido o debe quedar pendiente."
-                              open={ventaFormStep === 2}
-                              enabled={ventaMaxEnabledStep >= 2}
+                              wizardMode
+                              open
+                              enabled
                               statusLabel={ventaStep2Complete ? 'Listo para continuar' : 'Pendiente'}
-                              onToggle={() => {
-                                if (ventaMaxEnabledStep >= 2) setVentaFormStep(2)
-                              }}
+                              onToggle={() => {}}
                               footer={
                                 <>
                                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -3821,17 +3882,18 @@ function App() {
                                 </div>
                               </div>
                             </VentaFormStepCard>
+                            )}
 
+                            {ventaFormStep === 3 && (
                             <VentaFormStepCard
                               step="3"
                               title="Dispositivos y datos extra"
                               description="Marca los equipos incluidos, revisa la cantidad total y completa carpeta u observaciones si hace falta."
-                              open={ventaFormStep === 3}
-                              enabled={ventaMaxEnabledStep >= 3}
+                              wizardMode
+                              open
+                              enabled
                               statusLabel={ventaStep3Complete ? 'Listo para continuar' : 'Pendiente'}
-                              onToggle={() => {
-                                if (ventaMaxEnabledStep >= 3) setVentaFormStep(3)
-                              }}
+                              onToggle={() => {}}
                               footer={
                                 <>
                                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -3994,17 +4056,18 @@ function App() {
                                 </div>
                               </div>
                             </VentaFormStepCard>
+                            )}
 
+                            {ventaFormStep === 4 && (
                             <VentaFormStepCard
                               step="4"
                               title="Asignación de cuenta"
                               description="Por último decide si el sistema elige la mejor cuenta disponible o si quieres asignarla manualmente."
-                              open={ventaFormStep === 4}
-                              enabled={ventaMaxEnabledStep >= 4}
+                              wizardMode
+                              open
+                              enabled
                               statusLabel={ventaStep4Complete ? 'Listo para guardar' : 'Revisa la cuenta'}
-                              onToggle={() => {
-                                if (ventaMaxEnabledStep >= 4) setVentaFormStep(4)
-                              }}
+                              onToggle={() => {}}
                               footer={
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                   <button
@@ -4156,6 +4219,7 @@ function App() {
                                 </div>
                               </div>
                             </VentaFormStepCard>
+                            )}
                           </div>
 
                           <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
