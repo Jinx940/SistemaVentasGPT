@@ -39,6 +39,7 @@ import {
   saveUser,
   saveVenta,
   saveWhatsAppConfig,
+  sendClienteToBaja,
   sendWhatsAppDueToday,
   sendWhatsAppChatReply,
   sendWhatsAppTest,
@@ -2348,6 +2349,36 @@ function App() {
     })
   }
 
+  function enviarClienteABaja(cliente: Cliente) {
+    limpiarMensajes()
+
+    openConfirmModal({
+      title: 'Enviar cliente a baja',
+      message: `El cliente "${cliente.nombre}" pasará a la sección de bajas y sus ventas activas quedarán marcadas como BAJA.`,
+      type: 'warning',
+      confirmText: 'Dar de baja',
+      onConfirm: async () => {
+        try {
+          await sendClienteToBaja(cliente.id)
+          setSuccess('Cliente enviado a baja correctamente.')
+          if (editingClienteId === cliente.id) resetClienteForm()
+          await cargarClientes()
+          await cargarVentas()
+          await cargarHistorialBajas()
+          if (currentUser?.rol === 'ADMIN') {
+            await cargarCuentas()
+          }
+          await cargarDashboard()
+          await cargarPagos()
+          await cargarPagosResumen()
+          await cargarActividad()
+        } catch (error) {
+          setError(getErrorMessage(error, 'Error enviando el cliente a baja.'))
+        }
+      },
+    })
+  }
+
   function eliminarCuenta(id: number, correo: string) {
     limpiarMensajes()
 
@@ -2918,6 +2949,45 @@ function App() {
       })
       .sort((a, b) => a.id - b.id)
   }, [clientes, searchCliente])
+
+  const historialBajaPorClienteId = useMemo(() => {
+    const map = new Map<number, HistorialBaja>()
+    historialBajas.forEach((item) => {
+      if (!map.has(item.clienteId)) {
+        map.set(item.clienteId, item)
+      }
+    })
+    return map
+  }, [historialBajas])
+
+  const clientesActivosListado = useMemo(() => {
+    return clientesFiltrados.filter((cliente) => {
+      const baja = historialBajaPorClienteId.get(cliente.id)
+      if (!baja) return true
+      return Number(cliente.ventasActivas || 0) > 0
+    })
+  }, [clientesFiltrados, historialBajaPorClienteId])
+
+  const clientesEnBajaListado = useMemo(() => {
+    const q = normalizeText(searchCliente)
+
+    return clientes
+      .filter((cliente) => {
+        const baja = historialBajaPorClienteId.get(cliente.id)
+        if (!baja) return false
+        if (Number(cliente.ventasActivas || 0) > 0) return false
+        if (!q) return true
+        const blob = normalizeText(
+          `${cliente.nombre} ${cliente.telefono} ${cliente.monto} ${cliente.carpeta} ${cliente.observacion || ''} ${baja.detalle || ''}`
+        )
+        return blob.includes(q)
+      })
+      .sort((a, b) => {
+        const bajaA = historialBajaPorClienteId.get(a.id)?.fechaBaja || ''
+        const bajaB = historialBajaPorClienteId.get(b.id)?.fechaBaja || ''
+        return new Date(bajaB).getTime() - new Date(bajaA).getTime()
+      })
+  }, [clientes, historialBajaPorClienteId, searchCliente])
 
   const ventaClientesDisponibles = useMemo(() => {
     const q = normalizeText(searchVentaCliente)
@@ -4993,7 +5063,7 @@ function App() {
                   title="Listado de clientes"
                   description="Consulta rápidamente el padrón completo, la deuda acumulada y los accesos de cada cliente."
                   defaultOpen
-                  summaryValue={`${clientes.length} cliente${clientes.length === 1 ? '' : 's'}`}
+                  summaryValue={`${clientesActivosListado.length} cliente${clientesActivosListado.length === 1 ? '' : 's'}`}
                 >
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
                     <input
@@ -5012,7 +5082,7 @@ function App() {
                       marginBottom: '18px',
                     }}
                   >
-                    <DashboardMiniStat label="Clientes registrados" value={String(clientes.length)} accent="#60a5fa" />
+                    <DashboardMiniStat label="Clientes activos" value={String(clientesActivosListado.length)} accent="#60a5fa" />
                     <DashboardMiniStat label="Con deuda" value={String(clientesConDeudaCount)} accent="#f87171" />
                     <DashboardMiniStat label="Deuda acumulada" value={formatCurrencyPen(deudaClientesTotal)} accent="#fbbf24" />
                     <DashboardMiniStat
@@ -5024,11 +5094,11 @@ function App() {
 
                   {loadingClientes ? (
                     <p>Cargando clientes...</p>
-                  ) : clientesFiltrados.length === 0 ? (
-                    <p>No hay clientes registrados todavía. Cuando guardes uno, aquí aparecerán las acciones `Editar` y `Eliminar`.</p>
+                  ) : clientesActivosListado.length === 0 ? (
+                    <p>No hay clientes activos todavía. Cuando guardes uno, aquí aparecerán las acciones `Editar`, `Dar de baja` y `Eliminar`.</p>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1180px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1260px' }}>
                         <thead>
                           <tr style={{ background: '#0f172a' }}>
                             <th style={thStyle}>N°</th>
@@ -5044,7 +5114,7 @@ function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {clientesFiltrados.map((cliente, index) => (
+                          {clientesActivosListado.map((cliente, index) => (
                             <tr key={cliente.id}>
                               <td style={tdStyle}>{index + 1}</td>
                               <td style={tdStyle}>{cliente.nombre}</td>
@@ -5062,6 +5132,13 @@ function App() {
                                   </button>
                                   <button
                                     type="button"
+                                    onClick={() => enviarClienteABaja(cliente)}
+                                    style={buttonSecondary}
+                                  >
+                                    Dar de baja
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => eliminarCliente(cliente.id, cliente.nombre)}
                                     style={buttonDanger}
                                   >
@@ -5071,6 +5148,65 @@ function App() {
                               </td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </SectionAccordion>
+
+                <SectionAccordion
+                  icon="historial"
+                  title="Clientes en baja"
+                  description="Aquí quedan los clientes enviados a baja desde la pestaña Clientes, con la fecha y el detalle del cambio."
+                  summaryValue={`${clientesEnBajaListado.length} baja${clientesEnBajaListado.length === 1 ? '' : 's'}`}
+                >
+                  {loadingHistorial || loadingClientes ? (
+                    <p>Cargando bajas...</p>
+                  ) : clientesEnBajaListado.length === 0 ? (
+                    <p>No hay clientes en baja todavía.</p>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1120px' }}>
+                        <thead>
+                          <tr style={{ background: '#0f172a' }}>
+                            <th style={thStyle}>N°</th>
+                            <th style={thStyle}>Nombre</th>
+                            <th style={thStyle}>Teléfono</th>
+                            <th style={thStyle}>Monto</th>
+                            <th style={thStyle}>Fecha de baja</th>
+                            <th style={thStyle}>Detalle</th>
+                            <th style={thStyle}>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clientesEnBajaListado.map((cliente, index) => {
+                            const baja = historialBajaPorClienteId.get(cliente.id)
+
+                            return (
+                              <tr key={cliente.id}>
+                                <td style={tdStyle}>{index + 1}</td>
+                                <td style={tdStyle}>{cliente.nombre}</td>
+                                <td style={tdStyle}>{cliente.telefono}</td>
+                                <td style={tdStyle}>S/. {Number(cliente.monto || 0).toFixed(2)}</td>
+                                <td style={tdStyle}>{formatDateDisplay(baja?.fechaBaja)}</td>
+                                <td style={tdStyle}>{baja?.detalle || 'Sin detalle'}</td>
+                                <td style={tdStyle}>
+                                  <div style={actionsStyle}>
+                                    <button type="button" onClick={() => editarCliente(cliente)} style={buttonInfo}>
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => eliminarCliente(cliente.id, cliente.nombre)}
+                                      style={buttonDanger}
+                                    >
+                                      Eliminar
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

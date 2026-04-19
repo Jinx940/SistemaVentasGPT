@@ -4178,6 +4178,87 @@ app.put('/clientes/:id', requireAuth, async (req, res) => {
     }
 });
 
+app.post('/clientes/:id/baja', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({ error: 'ID inválido.' });
+    }
+
+    const cliente = await prisma.cliente.findUnique({
+      where: { id },
+    });
+
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado.' });
+    }
+
+    const ventasActivas = await prisma.venta.findMany({
+      where: {
+        clienteId: id,
+        estado: { not: 'BAJA' },
+      },
+      orderBy: { id: 'asc' },
+    });
+
+    const historialExistente = await prisma.historialBaja.findFirst({
+      where: { clienteId: id },
+      orderBy: { fechaBaja: 'desc' },
+    });
+
+    if (!ventasActivas.length && historialExistente) {
+      return res.status(400).json({ error: 'Este cliente ya fue enviado a baja.' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (ventasActivas.length) {
+        for (const venta of ventasActivas) {
+          await tx.venta.update({
+            where: { id: venta.id },
+            data: { estado: 'BAJA' },
+          });
+
+          await tx.historialBaja.create({
+            data: {
+              ventaId: venta.id,
+              clienteId: id,
+              clienteNombre: cliente.nombre,
+              telefono: cliente.telefono || null,
+              detalle: 'Cliente enviado a baja desde la pestaña Clientes',
+            },
+          });
+        }
+      } else {
+        await tx.historialBaja.create({
+          data: {
+            ventaId: null,
+            clienteId: id,
+            clienteNombre: cliente.nombre,
+            telefono: cliente.telefono || null,
+            detalle: 'Cliente sin ventas enviado a baja desde la pestaña Clientes',
+          },
+        });
+      }
+    });
+
+    await registrarActividad({
+      usuarioId: req.authUser?.id,
+      accion: 'BAJA',
+      entidad: 'CLIENTE',
+      entidadId: id,
+      descripcion: `Cliente enviado a baja: ${cliente.nombre}`,
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'Error enviando el cliente a baja.'),
+    });
+  }
+});
+
 
 app.delete('/clientes/:id', requireAuth, async (req, res) => {
   try {

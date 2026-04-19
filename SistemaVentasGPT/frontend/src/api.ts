@@ -202,6 +202,10 @@ export function deleteCliente(id: number) {
   return apiFetch<{ ok: true }>(`/clientes/${id}`, { method: 'DELETE' })
 }
 
+export function sendClienteToBaja(id: number) {
+  return apiFetch<{ ok: true }>(`/clientes/${id}/baja`, { method: 'POST' })
+}
+
 export function getCuentas() {
   return apiFetch<CuentaAcceso[]>('/cuentas')
 }
