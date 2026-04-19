@@ -2055,10 +2055,9 @@ function App() {
       !clienteForm.nombre.trim() ||
       !clienteForm.telefono.trim() ||
       !clienteForm.monto ||
-      Number(clienteForm.monto) <= 0 ||
-      !clienteForm.carpeta.trim()
+      Number(clienteForm.monto) <= 0
     ) {
-      setError('Nombre, teléfono, monto y carpeta son obligatorios.')
+      setError('Nombre, teléfono y monto son obligatorios.')
       return
     }
 
@@ -3031,6 +3030,17 @@ function App() {
       setVentaFormStep(ventaMaxEnabledStep as 1 | 2 | 3 | 4)
     }
   }, [ventaFormStep, ventaMaxEnabledStep])
+
+  useEffect(() => {
+    if (!error && !success) return
+
+    const timeoutId = window.setTimeout(() => {
+      setError('')
+      setSuccess('')
+    }, 2000)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [error, success])
 
   const isAdmin = currentUser?.rol === 'ADMIN'
   const selectedWhatsAppChat = useMemo(
@@ -4951,14 +4961,14 @@ function App() {
                       />
                       <input
                         name="carpeta"
-                        placeholder="Carpeta"
+                        placeholder="Carpeta (opcional)"
                         value={clienteForm.carpeta}
                         onChange={handleClienteChange}
                         style={inputStyle}
                       />
                       <textarea
                         name="observacion"
-                        placeholder="Observación"
+                        placeholder="Observación (opcional)"
                         value={clienteForm.observacion}
                         onChange={handleClienteChange}
                         style={{ ...inputStyle, minHeight: '90px', resize: 'vertical' }}
