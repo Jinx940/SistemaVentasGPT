@@ -548,6 +548,56 @@ function ConfigSectionAccordion({
   )
 }
 
+type VentaFormStepCardProps = {
+  step: string
+  title: string
+  description: string
+  children: React.ReactNode
+}
+
+function VentaFormStepCard({ step, title, description, children }: VentaFormStepCardProps) {
+  return (
+    <section
+      style={{
+        border: '1px solid rgba(51,65,85,0.9)',
+        borderRadius: '16px',
+        background: 'rgba(2,6,23,0.32)',
+        padding: '18px',
+        display: 'grid',
+        gap: '16px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap' }}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: '34px',
+            height: '34px',
+            padding: '0 10px',
+            borderRadius: '999px',
+            background: 'rgba(37,99,235,0.16)',
+            color: '#93c5fd',
+            fontSize: '13px',
+            fontWeight: 800,
+            flexShrink: 0,
+          }}
+        >
+          Paso {step}
+        </span>
+
+        <div style={{ minWidth: 0 }}>
+          <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '18px' }}>{title}</h3>
+          <p style={{ margin: '6px 0 0', color: '#94a3b8', lineHeight: 1.55 }}>{description}</p>
+        </div>
+      </div>
+
+      {children}
+    </section>
+  )
+}
+
 function formatChatTimestamp(value?: string | null) {
   if (!value) return '-'
 
@@ -3287,397 +3337,494 @@ function App() {
                         </div>
 
                         <form onSubmit={guardarVenta} style={{ padding: '16px' }}>
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
-                              columnGap: '18px',
-                              rowGap: '18px',
-                              alignItems: 'start',
-                            }}
-                          >
-                            <div>
-                              <label style={formLabelStyle}>Cliente *</label>
-                              <input
-                                name="cliente"
-                                placeholder="Nombre del cliente"
-                                value={ventaForm.cliente || ''}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Teléfono *</label>
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : '150px minmax(0, 1fr)',
-                                  gap: '12px',
-                                }}
-                              >
-                                <select
-                                  value={telefonoPais}
-                                  onChange={(e) => setTelefonoPais(e.target.value)}
-                                  style={inputStyle}
+                          <div style={{ display: 'grid', gap: '18px' }}>
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                                gap: '10px',
+                              }}
+                            >
+                              {[
+                                { step: '1', title: 'Cliente' },
+                                { step: '2', title: 'Cobro' },
+                                { step: '3', title: 'Dispositivos' },
+                                { step: '4', title: 'Cuenta' },
+                              ].map((item) => (
+                                <div
+                                  key={item.step}
+                                  style={{
+                                    border: '1px solid rgba(51,65,85,0.9)',
+                                    borderRadius: '12px',
+                                    background: 'rgba(2,6,23,0.22)',
+                                    padding: '12px 14px',
+                                  }}
                                 >
-                                  {PHONE_COUNTRIES.map((country) => (
-                                    <option key={country.dialCode} value={country.dialCode}>
-                                      {country.label}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                 <input
-                                   name="telefono"
-                                   placeholder="Ej: 950000000"
-                                   value={ventaForm.telefono}
-                                   onChange={handleVentaChange}
-                                   style={inputStyle}
-                                 />
-                               </div>
-                               {matchedClienteByPhone && (
-                                 <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px' }}>
-                                   Cliente encontrado: se cargaron automáticamente nombre, monto, carpeta y observación de{' '}
-                                   <b>{matchedClienteByPhone.nombre}</b>.
-                                 </div>
-                               )}
-                             </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Fecha de inicio *</label>
-                               <input
-                                 type="date"
-                                 name="fechaInicio"
-                                 value={ventaForm.fechaInicio}
-                                 onChange={handleVentaChange}
-                                 style={inputStyle}
-                               />
-                               <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                 Al elegir la fecha de inicio, el sistema propone automáticamente 1 mes para la fecha de cierre.
-                               </div>
-                             </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Fecha de cierre *</label>
-                               <input
-                                 type="date"
-                                 name="fechaCierre"
-                                 value={ventaForm.fechaCierre}
-                                 onChange={handleVentaChange}
-                                 style={inputStyle}
-                               />
-                               {ventaForm.fechaCierre && (
-                                 <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                   Mes de referencia: <b style={{ color: '#f8fafc' }}>{formatMonthYearLabel(ventaForm.fechaCierre)}</b>
-                                 </div>
-                               )}
-                             </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Monto (S/.) *</label>
-                              <input
-                                type="number"
-                                name="monto"
-                                placeholder="Monto"
-                                value={ventaForm.monto}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
+                                  <div style={{ color: '#60a5fa', fontSize: '12px', fontWeight: 800 }}>Paso {item.step}</div>
+                                  <div style={{ color: '#f8fafc', fontWeight: 700, marginTop: '4px' }}>{item.title}</div>
+                                </div>
+                              ))}
                             </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Descuento (S/.)</label>
-                              <input
-                                type="number"
-                                name="descuento"
-                                placeholder="Descuento"
-                                value={ventaForm.descuento}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Pago recibido</label>
-                              <select
-                                name="pagoRegistrado"
-                                value={ventaForm.pagoRegistrado}
-                                onChange={handleVentaChange}
-                                disabled={ventaForm.estado === 'BAJA'}
-                                style={{
-                                  ...inputStyle,
-                                  opacity: ventaForm.estado === 'BAJA' ? 0.6 : 1,
-                                  cursor: ventaForm.estado === 'BAJA' ? 'not-allowed' : 'pointer',
-                                }}
-                              >
-                                <option value="SI">Si</option>
-                                <option value="NO">No</option>
-                              </select>
-                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                Si eliges No, la venta se guardará pendiente hasta registrar el pago.
-                              </div>
-                            </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Fecha de pago</label>
-                              <input
-                                type="date"
-                                name="fechaPago"
-                                value={ventaForm.fechaPago}
-                                onChange={handleVentaChange}
-                                disabled={ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'}
-                                style={{
-                                  ...inputStyle,
-                                  opacity: ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA' ? 0.6 : 1,
-                                  cursor:
-                                    ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'
-                                      ? 'not-allowed'
-                                      : 'text',
-                                }}
-                              />
-                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                {ventaForm.pagoRegistrado === 'NO'
-                                  ? 'Se dejará vacía porque la venta quedará pendiente.'
-                                  : 'Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.'}
-                              </div>
-                            </div>
-
-                            <div>
-                              <label style={formLabelStyle}>Estado automático</label>
-                              <div
-                                style={{
-                                  ...inputStyle,
-                                  background: '#0b1730',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  minHeight: '48px',
-                                }}
-                              >
-                                {ventaStatusSummary.label}
-                              </div>
-                              <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
-                                {ventaStatusSummary.description}
-                              </div>
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <label style={formLabelStyle}>Tipo de dispositivo</label>
+                            <VentaFormStepCard
+                              step="1"
+                              title="Cliente y contacto"
+                              description="Primero identifica al cliente. Si el teléfono ya existe, el sistema completa los datos conocidos."
+                            >
                               <div
                                 style={{
                                   display: 'grid',
-                                  gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
-                                  gap: '10px',
+                                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
+                                  columnGap: '18px',
+                                  rowGap: '18px',
+                                  alignItems: 'start',
                                 }}
                               >
-                                {DISPOSITIVOS.map((item) => {
-                                  const active = getSelectedTipos(ventaForm.tipoDispositivo).includes(item)
-                                  return (
-                                    <button
-                                      key={item}
-                                      type="button"
-                                      onClick={() => handleTipoDispositivoSelect(item)}
-                                      style={{
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        width: '100%',
-                                        padding: '14px 16px',
-                                        borderRadius: '12px',
-                                        border: active ? '1px solid #60a5fa' : '1px solid #334155',
-                                        background: active ? '#13233f' : '#0b1730',
-                                        color: '#f8fafc',
-                                        cursor: 'pointer',
-                                        fontWeight: 700,
-                                      }}
-                                    >
-                                      <span>{item}</span>
-                                      <span
-                                        style={{
-                                          width: '15px',
-                                          height: '15px',
-                                          borderRadius: '3px',
-                                          border: '1px solid #cbd5e1',
-                                          background: active ? '#f8fafc' : 'transparent',
-                                          display: 'inline-block',
-                                        }}
-                                      />
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                              {getSelectedTipos(ventaForm.tipoDispositivo).includes(DISPOSITIVO_OTRO) && (
-                                <div style={{ marginTop: '12px' }}>
-                                  <label style={formLabelStyle}>Especifica el dispositivo de "Otro"</label>
+                                <div>
+                                  <label style={formLabelStyle}>Cliente *</label>
                                   <input
-                                    name="otroTipoDispositivo"
-                                    placeholder="Ej: Smart TV, iPad Mini, consola, etc."
-                                    value={ventaForm.otroTipoDispositivo}
+                                    name="cliente"
+                                    placeholder="Nombre del cliente"
+                                    value={ventaForm.cliente || ''}
+                                    onChange={handleVentaChange}
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div>
+                                  <label style={formLabelStyle}>Teléfono *</label>
+                                  <div
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : '150px minmax(0, 1fr)',
+                                      gap: '12px',
+                                    }}
+                                  >
+                                    <select
+                                      value={telefonoPais}
+                                      onChange={(e) => setTelefonoPais(e.target.value)}
+                                      style={inputStyle}
+                                    >
+                                      {PHONE_COUNTRIES.map((country) => (
+                                        <option key={country.dialCode} value={country.dialCode}>
+                                          {country.label}
+                                        </option>
+                                      ))}
+                                    </select>
+
+                                    <input
+                                      name="telefono"
+                                      placeholder="Ej: 950000000"
+                                      value={ventaForm.telefono}
+                                      onChange={handleVentaChange}
+                                      style={inputStyle}
+                                    />
+                                  </div>
+                                  {matchedClienteByPhone && (
+                                    <div style={{ marginTop: '8px', color: '#86efac', fontSize: '12px', lineHeight: 1.55 }}>
+                                      Cliente encontrado: se cargaron automáticamente nombre, monto, carpeta y observación de{' '}
+                                      <b>{matchedClienteByPhone.nombre}</b>.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </VentaFormStepCard>
+
+                            <VentaFormStepCard
+                              step="2"
+                              title="Periodo y cobro"
+                              description="Luego define el periodo, el monto y si el pago de este mes ya fue recibido o debe quedar pendiente."
+                            >
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
+                                  columnGap: '18px',
+                                  rowGap: '18px',
+                                  alignItems: 'start',
+                                }}
+                              >
+                                <div>
+                                  <label style={formLabelStyle}>Fecha de inicio *</label>
+                                  <input
+                                    type="date"
+                                    name="fechaInicio"
+                                    value={ventaForm.fechaInicio}
                                     onChange={handleVentaChange}
                                     style={inputStyle}
                                   />
                                   <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
-                                    Si necesitas más de uno, sepáralos por coma.
+                                    Al elegir la fecha de inicio, el sistema propone automáticamente 1 mes para la fecha de cierre.
                                   </div>
                                 </div>
-                              )}
-                              <div style={{ marginTop: '10px', color: '#94a3b8', fontSize: '12px' }}>
-                                Selección final: {buildVentaDeviceList(ventaForm).join(', ') || 'Sin dispositivos seleccionados'}
-                              </div>
-                            </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Cantidad de dispositivos *</label>
-                              <input
-                                type="number"
-                                name="cantidadDispositivos"
-                                placeholder="Cantidad de dispositivos"
-                                value={cantidadTiposSeleccionados ? String(cantidadTiposSeleccionados) : ''}
-                                readOnly
-                                style={{
-                                  ...inputStyle,
-                                  background: '#0b1730',
-                                  cursor: 'not-allowed',
-                                }}
-                              />
-                            </div>
+                                <div>
+                                  <label style={formLabelStyle}>Fecha de cierre *</label>
+                                  <input
+                                    type="date"
+                                    name="fechaCierre"
+                                    value={ventaForm.fechaCierre}
+                                    onChange={handleVentaChange}
+                                    style={inputStyle}
+                                  />
+                                  {ventaForm.fechaCierre && (
+                                    <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                      Mes de referencia: <b style={{ color: '#f8fafc' }}>{formatMonthYearLabel(ventaForm.fechaCierre)}</b>
+                                    </div>
+                                  )}
+                                </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Carpeta</label>
-                              <input
-                                name="carpeta"
-                                placeholder="Carpeta"
-                                value={ventaForm.carpeta || ''}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              />
-                            </div>
+                                <div>
+                                  <label style={formLabelStyle}>Monto (S/.) *</label>
+                                  <input
+                                    type="number"
+                                    name="monto"
+                                    placeholder="Monto"
+                                    value={ventaForm.monto}
+                                    onChange={handleVentaChange}
+                                    style={inputStyle}
+                                  />
+                                </div>
 
-                            <div>
-                              <label style={formLabelStyle}>Modo de asignación</label>
-                              <select
-                                name="assignmentMode"
-                                value={ventaForm.assignmentMode}
-                                onChange={handleVentaChange}
-                                style={inputStyle}
-                              >
-                                <option value="auto">Automático</option>
-                                <option value="manual">Manual</option>
-                              </select>
-                            </div>
+                                <div>
+                                  <label style={formLabelStyle}>Descuento (S/.)</label>
+                                  <input
+                                    type="number"
+                                    name="descuento"
+                                    placeholder="Descuento"
+                                    value={ventaForm.descuento}
+                                    onChange={handleVentaChange}
+                                    style={inputStyle}
+                                  />
+                                </div>
 
-                            <div>
-                              {ventaForm.assignmentMode === 'manual' && (
-                                <>
-                                  <label style={formLabelStyle}>Cuenta manual</label>
+                                <div>
+                                  <label style={formLabelStyle}>Pago recibido</label>
                                   <select
-                                    name="cuentaAccesoId"
-                                    value={ventaForm.cuentaAccesoId}
+                                    name="pagoRegistrado"
+                                    value={ventaForm.pagoRegistrado}
+                                    onChange={handleVentaChange}
+                                    disabled={ventaForm.estado === 'BAJA'}
+                                    style={{
+                                      ...inputStyle,
+                                      opacity: ventaForm.estado === 'BAJA' ? 0.6 : 1,
+                                      cursor: ventaForm.estado === 'BAJA' ? 'not-allowed' : 'pointer',
+                                    }}
+                                  >
+                                    <option value="SI">Si</option>
+                                    <option value="NO">No</option>
+                                  </select>
+                                  <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                    Si eliges No, la venta se guardará pendiente hasta registrar el pago.
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label style={formLabelStyle}>Fecha de pago</label>
+                                  <input
+                                    type="date"
+                                    name="fechaPago"
+                                    value={ventaForm.fechaPago}
+                                    onChange={handleVentaChange}
+                                    disabled={ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'}
+                                    style={{
+                                      ...inputStyle,
+                                      opacity: ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA' ? 0.6 : 1,
+                                      cursor:
+                                        ventaForm.pagoRegistrado === 'NO' || ventaForm.estado === 'BAJA'
+                                          ? 'not-allowed'
+                                          : 'text',
+                                    }}
+                                  />
+                                  <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                    {ventaForm.pagoRegistrado === 'NO'
+                                      ? 'Se dejará vacía porque la venta quedará pendiente.'
+                                      : 'Si la dejas igual, se usará la misma fecha de inicio como pago del mes actual.'}
+                                  </div>
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label style={formLabelStyle}>Estado automático</label>
+                                  <div
+                                    style={{
+                                      ...inputStyle,
+                                      background: '#0b1730',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      minHeight: '48px',
+                                    }}
+                                  >
+                                    {ventaStatusSummary.label}
+                                  </div>
+                                  <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px', lineHeight: 1.55 }}>
+                                    {ventaStatusSummary.description}
+                                  </div>
+                                </div>
+                              </div>
+                            </VentaFormStepCard>
+
+                            <VentaFormStepCard
+                              step="3"
+                              title="Dispositivos y datos extra"
+                              description="Marca los equipos incluidos, revisa la cantidad total y completa carpeta u observaciones si hace falta."
+                            >
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
+                                  columnGap: '18px',
+                                  rowGap: '18px',
+                                  alignItems: 'start',
+                                }}
+                              >
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label style={formLabelStyle}>Tipo de dispositivo</label>
+                                  <div
+                                    style={{
+                                      display: 'grid',
+                                      gridTemplateColumns: isPhone ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
+                                      gap: '10px',
+                                    }}
+                                  >
+                                    {DISPOSITIVOS.map((item) => {
+                                      const active = getSelectedTipos(ventaForm.tipoDispositivo).includes(item)
+                                      return (
+                                        <button
+                                          key={item}
+                                          type="button"
+                                          onClick={() => handleTipoDispositivoSelect(item)}
+                                          style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            width: '100%',
+                                            padding: '14px 16px',
+                                            borderRadius: '12px',
+                                            border: active ? '1px solid #60a5fa' : '1px solid #334155',
+                                            background: active ? '#13233f' : '#0b1730',
+                                            color: '#f8fafc',
+                                            cursor: 'pointer',
+                                            fontWeight: 700,
+                                          }}
+                                        >
+                                          <span>{item}</span>
+                                          <span
+                                            style={{
+                                              width: '15px',
+                                              height: '15px',
+                                              borderRadius: '3px',
+                                              border: '1px solid #cbd5e1',
+                                              background: active ? '#f8fafc' : 'transparent',
+                                              display: 'inline-block',
+                                            }}
+                                          />
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                  {getSelectedTipos(ventaForm.tipoDispositivo).includes(DISPOSITIVO_OTRO) && (
+                                    <div style={{ marginTop: '12px' }}>
+                                      <label style={formLabelStyle}>Especifica el dispositivo de "Otro"</label>
+                                      <input
+                                        name="otroTipoDispositivo"
+                                        placeholder="Ej: Smart TV, iPad Mini, consola, etc."
+                                        value={ventaForm.otroTipoDispositivo}
+                                        onChange={handleVentaChange}
+                                        style={inputStyle}
+                                      />
+                                      <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '12px' }}>
+                                        Si necesitas más de uno, sepáralos por coma.
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div style={{ marginTop: '10px', color: '#94a3b8', fontSize: '12px' }}>
+                                    Selección final: {buildVentaDeviceList(ventaForm).join(', ') || 'Sin dispositivos seleccionados'}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label style={formLabelStyle}>Cantidad de dispositivos *</label>
+                                  <input
+                                    type="number"
+                                    name="cantidadDispositivos"
+                                    placeholder="Cantidad de dispositivos"
+                                    value={cantidadTiposSeleccionados ? String(cantidadTiposSeleccionados) : ''}
+                                    readOnly
+                                    style={{
+                                      ...inputStyle,
+                                      background: '#0b1730',
+                                      cursor: 'not-allowed',
+                                    }}
+                                  />
+                                </div>
+
+                                <div>
+                                  <label style={formLabelStyle}>Carpeta</label>
+                                  <input
+                                    name="carpeta"
+                                    placeholder="Carpeta"
+                                    value={ventaForm.carpeta || ''}
+                                    onChange={handleVentaChange}
+                                    style={inputStyle}
+                                  />
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label style={formLabelStyle}>Observación</label>
+                                  <textarea
+                                    name="observacion"
+                                    value={ventaForm.observacion}
+                                    onChange={handleVentaChange}
+                                    style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
+                                  />
+                                </div>
+                              </div>
+                            </VentaFormStepCard>
+
+                            <VentaFormStepCard
+                              step="4"
+                              title="Asignación de cuenta"
+                              description="Por último decide si el sistema elige la mejor cuenta disponible o si quieres asignarla manualmente."
+                            >
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(280px, 1fr))',
+                                  columnGap: '18px',
+                                  rowGap: '18px',
+                                  alignItems: 'start',
+                                }}
+                              >
+                                <div>
+                                  <label style={formLabelStyle}>Modo de asignación</label>
+                                  <select
+                                    name="assignmentMode"
+                                    value={ventaForm.assignmentMode}
                                     onChange={handleVentaChange}
                                     style={inputStyle}
                                   >
-                                    <option value="">Selecciona una cuenta</option>
-                                    {manualAccounts.map((cuenta) => (
-                                      <option
-                                        key={cuenta.id}
-                                        value={cuenta.id}
-                                      >
-                                        {`${cuenta.correo} (${cuenta.used}/${cuenta.capacidad} clientes)`}
-                                      </option>
-                                    ))}
+                                    <option value="auto">Automático</option>
+                                    <option value="manual">Manual</option>
                                   </select>
-                                  <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>
-                                    {selectedCuentaPreview
-                                      ? `Clientes registrados: ${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}`
-                                      : 'Selecciona una cuenta activa disponible.'}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <div
-                                style={{
-                                  border: '1px solid #334155',
-                                  borderRadius: '14px',
-                                  padding: '14px',
-                                  background: '#0b1730',
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    textAlign: 'center',
-                                    color: '#f8fafc',
-                                    fontWeight: 700,
-                                    marginBottom: '10px',
-                                  }}
-                                >
-                                  Cuenta asignada
                                 </div>
 
-                                <div
-                                  style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(3, minmax(0, 1fr))',
-                                    gap: '12px',
-                                  }}
-                                >
-                                  <div>
-                                    <label style={formLabelStyle}>Correo</label>
-                                    <input
-                                      value={selectedCuentaPreview?.correo || ''}
-                                      readOnly
-                                      style={{ ...inputStyle, color: '#e5e7eb' }}
-                                    />
-                                    <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>
+                                <div>
+                                  {ventaForm.assignmentMode === 'manual' ? (
+                                    <>
+                                      <label style={formLabelStyle}>Cuenta manual</label>
+                                      <select
+                                        name="cuentaAccesoId"
+                                        value={ventaForm.cuentaAccesoId}
+                                        onChange={handleVentaChange}
+                                        style={inputStyle}
+                                      >
+                                        <option value="">Selecciona una cuenta</option>
+                                        {manualAccounts.map((cuenta) => (
+                                          <option key={cuenta.id} value={cuenta.id}>
+                                            {`${cuenta.correo} (${cuenta.used}/${cuenta.capacidad} clientes)`}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>
+                                        {selectedCuentaPreview
+                                          ? `Clientes registrados: ${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}`
+                                          : 'Selecciona una cuenta activa disponible.'}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div
+                                      style={{
+                                        height: '100%',
+                                        minHeight: '78px',
+                                        borderRadius: '12px',
+                                        border: '1px dashed #334155',
+                                        background: 'rgba(15,23,42,0.45)',
+                                        padding: '14px',
+                                        color: '#94a3b8',
+                                        fontSize: '13px',
+                                        lineHeight: 1.55,
+                                      }}
+                                    >
+                                      El modo automático elige la mejor cuenta activa disponible según la capacidad libre del momento.
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <div
+                                    style={{
+                                      border: '1px solid #334155',
+                                      borderRadius: '14px',
+                                      padding: '14px',
+                                      background: '#0b1730',
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        textAlign: 'center',
+                                        color: '#f8fafc',
+                                        fontWeight: 700,
+                                        marginBottom: '10px',
+                                      }}
+                                    >
+                                      Cuenta asignada
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(3, minmax(0, 1fr))',
+                                        gap: '12px',
+                                      }}
+                                    >
+                                      <div>
+                                        <label style={formLabelStyle}>Correo</label>
+                                        <input
+                                          value={selectedCuentaPreview?.correo || ''}
+                                          readOnly
+                                          style={{ ...inputStyle, color: '#e5e7eb' }}
+                                        />
+                                        <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>
+                                          {ventaForm.assignmentMode === 'auto'
+                                            ? 'Mostrando la mejor cuenta activa disponible en este momento.'
+                                            : selectedCuentaPreview
+                                              ? `Clientes registrados con este correo: ${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}.`
+                                              : 'Selecciona una cuenta activa disponible.'}
+                                        </div>
+                                      </div>
+
+                                      <div>
+                                        <label style={formLabelStyle}>Capacidad</label>
+                                        <input
+                                          value={
+                                            selectedCuentaPreview
+                                              ? `${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}`
+                                              : ''
+                                          }
+                                          readOnly
+                                          style={{ ...inputStyle, color: '#e5e7eb' }}
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label style={formLabelStyle}>Estado</label>
+                                        <input
+                                          value={selectedCuentaPreview ? (selectedCuentaPreview.activa ? 'ACTIVA' : 'INACTIVA') : ''}
+                                          readOnly
+                                          style={{ ...inputStyle, color: '#e5e7eb' }}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div style={{ marginTop: '10px', color: '#94a3b8', fontSize: '12px' }}>
                                       {ventaForm.assignmentMode === 'auto'
                                         ? 'Mostrando la mejor cuenta activa disponible en este momento.'
-                                        : selectedCuentaPreview
-                                          ? `Clientes registrados con este correo: ${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}.`
-                                          : 'Selecciona una cuenta activa disponible.'}
+                                        : 'La cuenta manual usa solo registros reales de la pestana Cuentas.'}
                                     </div>
                                   </div>
-
-                                  <div>
-                                    <label style={formLabelStyle}>Capacidad</label>
-                                    <input
-                                      value={
-                                        selectedCuentaPreview
-                                          ? `${selectedCuentaPreview.used}/${selectedCuentaPreview.capacidad}`
-                                          : ''
-                                      }
-                                      readOnly
-                                      style={{ ...inputStyle, color: '#e5e7eb' }}
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label style={formLabelStyle}>Estado</label>
-                                    <input
-                                      value={selectedCuentaPreview ? (selectedCuentaPreview.activa ? 'ACTIVA' : 'INACTIVA') : ''}
-                                      readOnly
-                                      style={{ ...inputStyle, color: '#e5e7eb' }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div style={{ marginTop: '10px', color: '#94a3b8', fontSize: '12px' }}>
-                                  {ventaForm.assignmentMode === 'auto'
-                                    ? 'Mostrando la mejor cuenta activa disponible en este momento.'
-                                    : 'La cuenta manual usa solo registros reales de la pestana Cuentas.'}
                                 </div>
                               </div>
-                            </div>
-
-                            <div style={{ gridColumn: '1 / -1' }}>
-                              <label style={formLabelStyle}>Observación</label>
-                              <textarea
-                                name="observacion"
-                                value={ventaForm.observacion}
-                                onChange={handleVentaChange}
-                                style={{ ...inputStyle, minHeight: '110px', resize: 'vertical' }}
-                              />
-                            </div>
+                            </VentaFormStepCard>
                           </div>
 
                           <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
