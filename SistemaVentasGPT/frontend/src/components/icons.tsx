@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 type IconName =
   | 'dashboard'
   | 'morosos'
+  | 'bajas'
   | 'registro'
   | 'ventas'
   | 'clientes'
@@ -57,6 +58,15 @@ export function AppIcon({ name, size = 18, style }: AppIconProps) {
           <path d="M9.5 9.5h5" />
           <path d="M9.5 13.5h5" />
           <path d="M12 9.5v4" />
+        </svg>
+      )
+    case 'bajas':
+      return (
+        <svg {...props}>
+          <path d="M4 7h16" />
+          <path d="M7 7v10a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7" />
+          <path d="M10 11h4" />
+          <path d="M9 4h6" />
         </svg>
       )
     case 'registro':

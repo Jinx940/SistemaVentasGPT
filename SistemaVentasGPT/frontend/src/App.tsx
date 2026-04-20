@@ -99,11 +99,12 @@ import {
 
 type TabKey =
   | 'dashboard'
-  | 'morosos'
+  | 'cuentas'
   | 'registro'
   | 'ventas'
+  | 'morosos'
+  | 'bajas'
   | 'clientes'
-  | 'cuentas'
   | 'chats'
   | 'historial'
   | 'configuracion'
@@ -1173,6 +1174,7 @@ function App() {
   const [editingVentaId, setEditingVentaId] = useState<number | null>(null)
 
   const [searchCliente, setSearchCliente] = useState('')
+  const [searchBaja, setSearchBaja] = useState('')
   const [searchCuenta, setSearchCuenta] = useState('')
   const [searchVenta, setSearchVenta] = useState('')
   const [searchVentaCliente, setSearchVentaCliente] = useState('')
@@ -3342,7 +3344,7 @@ function App() {
   }, [clientesFiltrados, historialBajaPorClienteId])
 
   const clientesEnBajaListado = useMemo(() => {
-    const q = normalizeText(searchCliente)
+    const q = normalizeText(searchBaja)
 
     return clientes
       .filter((cliente) => {
@@ -3360,7 +3362,7 @@ function App() {
         const bajaB = historialBajaPorClienteId.get(b.id)?.fechaBaja || ''
         return new Date(bajaB).getTime() - new Date(bajaA).getTime()
       })
-  }, [clientes, historialBajaPorClienteId, searchCliente])
+  }, [clientes, historialBajaPorClienteId, searchBaja])
 
   const ventaClientesDisponibles = useMemo(() => {
     const q = normalizeText(searchVentaCliente)
@@ -3497,14 +3499,15 @@ function App() {
     () =>
       [
         { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-        { key: 'morosos', label: 'Morosos', icon: 'morosos' },
+        ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
         { key: 'registro', label: 'Registrar', icon: 'registro' },
         { key: 'ventas', label: 'Ventas', icon: 'ventas' },
-        { key: 'clientes', label: 'Clientes', icon: 'clientes' },
-        ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
-        { key: 'chats', label: 'Chats', icon: 'whatsapp' },
+        { key: 'morosos', label: 'Morosos', icon: 'morosos' },
+        { key: 'bajas', label: 'Bajas', icon: 'bajas' },
         { key: 'historial', label: 'Historial', icon: 'historial' },
         { key: 'configuracion', label: 'Configuración', icon: 'configuracion' },
+        { key: 'clientes', label: 'Clientes', icon: 'clientes' },
+        { key: 'chats', label: 'Chats', icon: 'whatsapp' },
       ] as Array<{ key: TabKey; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }>,
     [isAdmin]
   )
@@ -5551,12 +5554,51 @@ function App() {
                   )}
                 </SectionAccordion>
 
-                <SectionAccordion
-                  icon="historial"
-                  title="Clientes en baja"
-                  description="Aquí quedan los clientes enviados a baja desde la pestaña Clientes, con la fecha y el detalle del cambio."
-                  summaryValue={`${clientesEnBajaListado.length} baja${clientesEnBajaListado.length === 1 ? '' : 's'}`}
-                >
+              </div>
+            )}
+
+            {activeTab === 'bajas' && (
+              <div style={{ display: 'grid', gap: '20px' }}>
+                <div style={cardStyle}>
+                  <div style={headerRowStyle}>
+                    <div>
+                      <h2 style={{ margin: 0, color: '#f8fafc' }}>Clientes en baja</h2>
+                      <p style={{ margin: '6px 0 0', color: '#94a3b8', fontSize: '14px', lineHeight: 1.55 }}>
+                        Aquí quedan los clientes enviados a baja, con la fecha y el detalle del movimiento.
+                      </p>
+                    </div>
+                    <input
+                      placeholder="Buscar baja..."
+                      value={searchBaja}
+                      onChange={(e) => setSearchBaja(e.target.value)}
+                      style={{ ...inputStyle, maxWidth: '320px' }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '12px',
+                      marginTop: '18px',
+                      marginBottom: '18px',
+                    }}
+                  >
+                    <DashboardMiniStat label="Clientes en baja" value={String(clientesEnBajaListado.length)} accent="#f87171" />
+                    <DashboardMiniStat
+                      label="Monto congelado"
+                      value={formatCurrencyPen(
+                        clientesEnBajaListado.reduce((sum, cliente) => sum + Number(cliente.monto || 0), 0),
+                      )}
+                      accent="#fbbf24"
+                    />
+                    <DashboardMiniStat
+                      label="Última baja"
+                      value={formatDateDisplay(clientesEnBajaListado[0] ? historialBajaPorClienteId.get(clientesEnBajaListado[0].id)?.fechaBaja : null)}
+                      accent="#60a5fa"
+                    />
+                  </div>
+
                   {loadingHistorial || loadingClientes ? (
                     <p>Cargando bajas...</p>
                   ) : clientesEnBajaListado.length === 0 ? (
@@ -5608,7 +5650,7 @@ function App() {
                       </table>
                     </div>
                   )}
-                </SectionAccordion>
+                </div>
               </div>
             )}
 
