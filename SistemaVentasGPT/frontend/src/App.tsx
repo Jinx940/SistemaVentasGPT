@@ -3584,15 +3584,15 @@ function App() {
     () =>
       [
         { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-        ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
-        { key: 'registro', label: 'Registrar', icon: 'registro' },
+        { key: 'registro', label: 'Registrar venta', icon: 'registro' },
         { key: 'ventas', label: 'Ventas', icon: 'ventas' },
         { key: 'morosos', label: 'Morosos', icon: 'morosos' },
+        { key: 'chats', label: 'Chats', icon: 'whatsapp' },
+        { key: 'clientes', label: 'Clientes', icon: 'clientes' },
+        ...(isAdmin ? [{ key: 'cuentas', label: 'Cuentas', icon: 'cuentas' }] : []),
         { key: 'bajas', label: 'Bajas', icon: 'bajas' },
         { key: 'historial', label: 'Historial', icon: 'historial' },
         { key: 'configuracion', label: 'Configuración', icon: 'configuracion' },
-        { key: 'clientes', label: 'Clientes', icon: 'clientes' },
-        { key: 'chats', label: 'Chats', icon: 'whatsapp' },
       ] as Array<{ key: TabKey; label: string; icon: Parameters<typeof AppIcon>[0]['name'] }>,
     [isAdmin]
   )
