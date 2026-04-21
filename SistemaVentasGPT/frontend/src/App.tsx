@@ -116,6 +116,17 @@ type PhoneCountry = {
 
 type ModalType = 'info' | 'success' | 'warning' | 'danger'
 
+type PaymentRegistrationMode = 'adelanto' | 'periodo_actual' | 'vencido'
+
+type PaymentRegistrationContext = {
+  mode: PaymentRegistrationMode
+  label: string
+  type: ModalType
+  confirmMessage: string
+  modalDescription: string
+  helperText: string
+}
+
 type ConfirmModalState = {
   open: boolean
   title: string
@@ -1064,6 +1075,73 @@ function getVentaStatusSummary(form: VentaFormState) {
   return {
     label: 'PAGADO hasta la fecha de cierre',
     description: 'Cuando pase la fecha de cierre, el sistema la mostrará como pendiente de forma automática.',
+  }
+}
+
+function getVentaPaymentContext(venta?: Venta | null): PaymentRegistrationContext {
+  if (!venta) {
+    return {
+      mode: 'periodo_actual',
+      label: 'Pago del período actual',
+      type: 'success',
+      confirmMessage: 'Se abrirá el registro de pago para esta venta.',
+      modalDescription:
+        'El sistema tomará este cobro como el pago del período actual y avanzará el siguiente ciclo.',
+      helperText: 'Usa esta opción cuando el cliente aún no tiene pago registrado en su período vigente.',
+    }
+  }
+
+  const fechaCierre = formatDateDisplay(venta.fechaCierre)
+  const diasAtraso = getDaysOverdue(venta.fechaCierre)
+
+  if (venta.estado === 'PAGADO' && diasAtraso === 0) {
+    return {
+      mode: 'adelanto',
+      label: 'Adelanto de pago',
+      type: 'info',
+      confirmMessage: `Esta venta ya está pagada hasta ${fechaCierre}. Si continúas, el sistema registrará un adelanto para el siguiente ciclo.`,
+      modalDescription:
+        `Esta venta ya está cubierta hasta ${fechaCierre}. El pago que registres ahora se tomará como un adelanto y extenderá el servicio desde esa fecha.`,
+      helperText: 'Usa esta opción cuando el cliente paga antes de llegar a su próximo vencimiento.',
+    }
+  }
+
+  if (diasAtraso > 0) {
+    const diasTexto = `${diasAtraso} día${diasAtraso === 1 ? '' : 's'}`
+
+    return {
+      mode: 'vencido',
+      label: 'Pago de período vencido',
+      type: 'warning',
+      confirmMessage: `Este servicio venció hace ${diasTexto}. Si continúas, el sistema tomará el cobro como el pago del período vencido y moverá el cierre al siguiente ciclo.`,
+      modalDescription:
+        `La fecha de cobro (${fechaCierre}) ya fue excedida. Al guardar, el sistema regularizará el período vencido y avanzará el servicio al mes siguiente.`,
+      helperText: 'Usa esta opción cuando el cliente paga después de su fecha de cobro.',
+    }
+  }
+
+  return {
+    mode: 'periodo_actual',
+    label: 'Pago del período actual',
+    type: 'success',
+    confirmMessage: `Esta venta aún no tiene pago registrado para el período que cierra el ${fechaCierre}. Si continúas, el sistema lo marcará como pagado y avanzará el siguiente ciclo.`,
+    modalDescription:
+      `Esta venta sigue dentro de su período actual y todavía no registra pago. Al guardar, el sistema tomará este cobro como el pago vigente del mes.`,
+    helperText: 'Usa esta opción cuando el cliente está pagando su período actual antes del vencimiento.',
+  }
+}
+
+function getVentaPaymentProjection(venta?: Venta | null, mesesPagados = 1) {
+  if (!venta) {
+    return {
+      fechaInicio: '',
+      fechaCierre: '',
+    }
+  }
+
+  return {
+    fechaInicio: addMonthsToInputDate(venta.fechaInicio, mesesPagados),
+    fechaCierre: addMonthsToInputDate(venta.fechaCierre, mesesPagados),
   }
 }
 
@@ -2187,6 +2265,7 @@ function App() {
 
     const monto = Number(paymentMonto)
     const mesesPagados = Number(paymentMeses)
+    const paymentContext = getVentaPaymentContext(paymentModalVenta)
 
     if (!monto || monto <= 0) {
       setError('La cantidad pagada calculada no es válida.')
@@ -2210,9 +2289,14 @@ function App() {
         mesesPagados,
       })
 
-      setSuccess(
-        `Pago registrado correctamente para ${paymentModalVenta.cliente?.nombre || 'el cliente'}.`
-      )
+      const successPrefix =
+        paymentContext.mode === 'adelanto'
+          ? 'Adelanto de pago registrado correctamente'
+          : paymentContext.mode === 'vencido'
+            ? 'Pago del período vencido registrado correctamente'
+            : 'Pago del período actual registrado correctamente'
+
+      setSuccess(`${successPrefix} para ${paymentModalVenta.cliente?.nombre || 'el cliente'}.`)
 
       closePaymentModal()
       await cargarVentas()
@@ -2793,11 +2877,12 @@ function App() {
 
   function registrarPagoVenta(venta: Venta) {
     limpiarMensajes()
+    const paymentContext = getVentaPaymentContext(venta)
 
     openConfirmModal({
       title: 'Registrar pago',
-      message: `Se abrirá el registro de pago para "${venta.cliente?.nombre || ''}".`,
-      type: 'success',
+      message: `${paymentContext.confirmMessage} Cliente: "${venta.cliente?.nombre || ''}".`,
+      type: paymentContext.type,
       confirmText: 'Continuar',
       onConfirm: () => {
         openPaymentModal(venta)
@@ -3544,6 +3629,27 @@ function App() {
       onConfirm: goToTab,
     })
   }
+
+  const paymentModalContext = getVentaPaymentContext(paymentModalVenta)
+  const paymentProjection = getVentaPaymentProjection(paymentModalVenta, Number(paymentMeses))
+  const paymentContextPalette =
+    paymentModalContext.mode === 'adelanto'
+      ? {
+          border: 'rgba(96,165,250,0.35)',
+          background: 'rgba(30,41,59,0.82)',
+          color: '#bfdbfe',
+        }
+      : paymentModalContext.mode === 'vencido'
+        ? {
+            border: 'rgba(251,191,36,0.35)',
+            background: 'rgba(120,53,15,0.24)',
+            color: '#fde68a',
+          }
+        : {
+            border: 'rgba(74,222,128,0.35)',
+            background: 'rgba(20,83,45,0.24)',
+            color: '#bbf7d0',
+          }
 
   if (!authReady) {
     return (
@@ -5300,7 +5406,7 @@ function App() {
                                 <td style={tdStyle}>{venta.cuentaAcceso?.correo || '-'}</td>
                                 <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                                   <div style={actionsStyle}>
-                                    {(venta.estado === 'PENDIENTE' || venta.estado === 'MENSAJE_ENVIADO') && (
+                                    {venta.estado !== 'BAJA' && (
                                       <button
                                         type="button"
                                         onClick={() => registrarPagoVenta(venta)}
@@ -7032,13 +7138,54 @@ function App() {
               <div style={modalOverlayStyle}>
                 <div style={{ ...modalCardStyle, maxWidth: '760px' }}>
                   <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '18px' }}>
-                    <div style={getModalIconBoxStyle('success')}>✓</div>
+                    <div style={getModalIconBoxStyle(paymentModalContext.type)}>
+                      {getModalIconSymbol(paymentModalContext.type)}
+                    </div>
 
                     <div style={{ flex: 1 }}>
                       <h3 style={modalTitleStyle}>Registrar pago</h3>
-                      <p style={modalTextStyle}>
-                        El monto se calcula automáticamente con el precio fijo del cliente. Al guardar, el sistema extenderá el ciclo 1 o 2 meses desde la fecha actual de cierre.
-                      </p>
+                      <p style={modalTextStyle}>{paymentModalContext.modalDescription}</p>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginBottom: '18px',
+                      padding: '16px',
+                      borderRadius: '16px',
+                      border: `1px solid ${paymentContextPalette.border}`,
+                      background: paymentContextPalette.background,
+                      display: 'grid',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '6px 10px',
+                          borderRadius: '999px',
+                          background: 'rgba(15,23,42,0.68)',
+                          color: paymentContextPalette.color,
+                          fontWeight: 700,
+                          fontSize: '12px',
+                        }}
+                      >
+                        {paymentModalContext.label}
+                      </span>
+                      <span style={{ color: '#cbd5e1', fontSize: '13px' }}>
+                        Cliente: {paymentModalVenta.cliente?.nombre || '-'}
+                      </span>
+                    </div>
+                    <div style={{ color: '#e2e8f0', fontSize: '13px', lineHeight: 1.5 }}>
+                      {paymentModalContext.helperText}
+                    </div>
+                    <div style={{ color: '#cbd5e1', fontSize: '13px' }}>
+                      Período actual: <b style={{ color: '#f8fafc' }}>{formatDateDisplay(paymentModalVenta.fechaInicio)} al {formatDateDisplay(paymentModalVenta.fechaCierre)}</b>
+                    </div>
+                    <div style={{ color: '#cbd5e1', fontSize: '13px' }}>
+                      Nuevo período tras el pago: <b style={{ color: '#f8fafc' }}>{formatDateDisplay(paymentProjection.fechaInicio)} al {formatDateDisplay(paymentProjection.fechaCierre)}</b>
                     </div>
                   </div>
 
