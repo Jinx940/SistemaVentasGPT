@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
 import { getErrorMessage, submitClientRequest } from '../api'
 import { AppIcon } from './icons'
@@ -6,10 +6,11 @@ import './client-intake.css'
 
 const countryNames = new Intl.DisplayNames(['es'], { type: 'region' })
 
-function countryFlag(country: CountryCode) {
-  return [...country]
-    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
-    .join('')
+function countryFlagUrl(country: CountryCode) {
+  const codePoints = [...country]
+    .map((letter) => (127397 + letter.charCodeAt(0)).toString(16))
+    .join('-')
+  return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/svg/${codePoints}.svg`
 }
 
 const phoneCountries = getCountries()
@@ -17,9 +18,104 @@ const phoneCountries = getCountries()
     country,
     label: countryNames.of(country) ?? country,
     callingCode: getCountryCallingCode(country),
-    flag: countryFlag(country),
   }))
   .sort((first, second) => first.label.localeCompare(second.label, 'es'))
+
+type CountrySelectProps = {
+  value: CountryCode
+  onChange: (country: CountryCode) => void
+}
+
+function CountrySelect({ value, onChange }: CountrySelectProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selectedCountry = phoneCountries.find((country) => country.country === value) ?? phoneCountries[0]
+  const normalizedQuery = query.trim().toLocaleLowerCase('es')
+  const filteredCountries = normalizedQuery
+    ? phoneCountries.filter((country) =>
+        `${country.label} ${country.callingCode}`.toLocaleLowerCase('es').includes(normalizedQuery),
+      )
+    : phoneCountries
+
+  useEffect(() => {
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false)
+        setQuery('')
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
+  }, [])
+
+  function selectCountry(country: CountryCode) {
+    onChange(country)
+    setIsOpen(false)
+    setQuery('')
+  }
+
+  return (
+    <div className="client-intake-country-select" ref={rootRef}>
+      <button
+        type="button"
+        className="client-intake-country-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <img src={countryFlagUrl(selectedCountry.country)} width="24" height="18" alt="" aria-hidden="true" />
+        <span className="client-intake-country-name">{selectedCountry.label}</span>
+        <span className="client-intake-country-code">+{selectedCountry.callingCode}</span>
+        <span className="client-intake-country-chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {isOpen && (
+        <div className="client-intake-country-menu">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setIsOpen(false)
+                setQuery('')
+              }
+            }}
+            placeholder="Buscar país o prefijo"
+            aria-label="Buscar país"
+            autoFocus
+          />
+          <div className="client-intake-country-options" role="listbox" aria-label="Países">
+            {filteredCountries.map((country) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={country.country === value}
+                className={country.country === value ? 'is-selected' : ''}
+                key={country.country}
+                onClick={() => selectCountry(country.country)}
+              >
+                <img
+                  src={countryFlagUrl(country.country)}
+                  width="24"
+                  height="18"
+                  loading="lazy"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span>{country.label}</span>
+                <small>+{country.callingCode}</small>
+              </button>
+            ))}
+            {!filteredCountries.length && <p>No encontramos ese país.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
 const formSteps = [
@@ -228,16 +324,10 @@ export function ClientIntakeForm() {
             <input value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} placeholder="Nombres y apellidos" autoComplete="name" />
           </label>
 
-          <label className="client-intake-field">
+          <div className="client-intake-field">
             <span>País *</span>
-            <select value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value as CountryCode })}>
-              {phoneCountries.map((country) => (
-                <option value={country.country} key={country.country}>
-                  {country.flag} {country.label} (+{country.callingCode})
-                </option>
-              ))}
-            </select>
-          </label>
+            <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} />
+          </div>
 
           <label className="client-intake-field">
             <span>Teléfono *</span>
@@ -344,5 +434,6 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
