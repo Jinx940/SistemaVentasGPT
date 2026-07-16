@@ -317,19 +317,19 @@ export function ClientIntakeForm() {
               <span>1</span>
               <div><strong>Datos de contacto</strong></div>
             </div>
-            <div className="client-intake-section-grid">
+            <div className="client-intake-section-grid client-intake-contact-grid">
 
           <label className="client-intake-field client-intake-field--wide">
             <span>Nombre completo *</span>
             <input value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} placeholder="Nombres y apellidos" autoComplete="name" />
           </label>
 
-          <div className="client-intake-field">
+          <div className="client-intake-field client-intake-country-field">
             <span>País *</span>
             <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} />
           </div>
 
-          <label className="client-intake-field">
+          <label className="client-intake-field client-intake-phone-field">
             <span>Teléfono *</span>
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
           </label>
@@ -434,6 +434,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
