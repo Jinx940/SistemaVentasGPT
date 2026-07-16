@@ -135,10 +135,8 @@
   font-weight: 900;
 }
 
-.client-intake-section-title strong,
-.client-intake-section-title small { display: block; }
+.client-intake-section-title strong { display: block; }
 .client-intake-section-title strong { color: #f1f5f9; font-size: 15px; }
-.client-intake-section-title small { margin-top: 3px; color: #718096; font-size: 11px; line-height: 1.35; }
 
 .client-intake-field input,
 .client-intake-field select,
@@ -157,14 +155,6 @@
 .client-intake-field textarea:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
-
-.client-intake-field-help {
-  margin-top: -2px;
-  color: #74839b;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1.45;
 }
 
 .client-intake-money-input {
@@ -221,8 +211,6 @@
 }
 
 .client-intake-devices legend { margin-bottom: 10px; }
-.client-intake-device-help { margin: -4px 0 10px; color: #74839b; font-size: 11px; font-weight: 500; }
-
 .client-intake-chip-list { display: flex; flex-wrap: wrap; gap: 9px; }
 .client-intake-chip-list button {
   border: 1px solid #334155;
