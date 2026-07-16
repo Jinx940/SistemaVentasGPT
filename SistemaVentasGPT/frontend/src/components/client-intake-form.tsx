@@ -297,8 +297,8 @@ export function ClientIntakeForm() {
             <div className="client-intake-device-cost" role="note">
               <span className="client-intake-currency-badge" aria-hidden="true">S/</span>
               <span>
-                <strong>{additionalDeviceCount === 1 ? 'Has elegido 1 dispositivo adicional' : `Has elegido ${additionalDeviceCount} dispositivos adicionales`}</strong>
-                El primer dispositivo está incluido. Los adicionales tienen un costo en soles. Te confirmaremos el importe exacto antes de activar el servicio.
+                <strong>Costo por dispositivo adicional</strong>
+                Desde 2 dispositivos se aplica un costo adicional. Coordínalo con el dueño.
               </span>
             </div>
           )}
@@ -333,3 +333,4 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
