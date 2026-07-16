@@ -118,6 +118,32 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
+.client-intake-field-help {
+  margin-top: -2px;
+  color: #74839b;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.client-intake-device-cost {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+  padding: 13px 15px;
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  border-radius: 13px;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.22);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.client-intake-device-cost svg { flex: 0 0 auto; margin-top: 2px; }
+.client-intake-device-cost strong { display: block; margin-bottom: 2px; color: #fef3c7; }
+
 .client-intake-devices {
   margin: 0;
   padding: 0;
@@ -176,6 +202,7 @@
   .client-intake-form { padding: 22px 20px 28px; grid-template-columns: 1fr; }
   .client-intake-field--wide,
   .client-intake-error,
+  .client-intake-device-cost,
   .client-intake-submit,
   .client-intake-privacy { grid-column: 1; }
   .client-intake-success { min-height: 100vh; border: 0; border-radius: 0; display: grid; align-content: center; }

@@ -4245,6 +4245,9 @@ app.post('/solicitudes-clientes/public', async (req, res) => {
     const fechaInicio = parseLocalDate(getCurrentDateInputForTimeZone('America/Lima'));
     const fechaCierre = addMonthsPreserveDay(fechaInicio, 1);
     const clienteData = buildClienteData(req.body);
+    if (!clienteData.carpeta) {
+      throw new Error('El nombre del proyecto es obligatorio para identificar los chats.');
+    }
     const ventaData = buildVentaData(
       {
         ...req.body,
@@ -4335,6 +4338,9 @@ app.post('/solicitudes-clientes/:id/aprobar', requireRole('ADMIN'), async (req, 
       carpeta: req.body.carpeta ?? solicitud.carpeta,
       observacion: req.body.observacion ?? solicitud.observacion,
     });
+    if (!clienteData.carpeta) {
+      throw new Error('El nombre del proyecto es obligatorio para identificar los chats.');
+    }
     const estadoVenta = cleanText(req.body.estadoVenta).toUpperCase() === 'PAGADO'
       ? 'PAGADO'
       : 'PENDIENTE';
