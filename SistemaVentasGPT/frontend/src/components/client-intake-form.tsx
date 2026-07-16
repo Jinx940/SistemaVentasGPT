@@ -165,7 +165,7 @@ export function ClientIntakeForm() {
           <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>1</span>
-              <div><strong>Datos de contacto</strong><small>Para identificarte y comunicarnos contigo.</small></div>
+              <div><strong>Datos de contacto</strong></div>
             </div>
             <div className="client-intake-section-grid">
 
@@ -184,7 +184,6 @@ export function ClientIntakeForm() {
           <label className="client-intake-field">
             <span>WhatsApp *</span>
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
-            <small className="client-intake-field-help">Te contactaremos a este número para confirmar el servicio.</small>
           </label>
             </div>
           </section>
@@ -192,7 +191,7 @@ export function ClientIntakeForm() {
           <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>2</span>
-              <div><strong>Información del servicio</strong><small>Indica el pago acordado y cómo quieres identificar tus chats.</small></div>
+              <div><strong>Información del servicio</strong></div>
             </div>
             <div className="client-intake-section-grid">
 
@@ -202,13 +201,11 @@ export function ClientIntakeForm() {
               <strong>S/</strong>
               <input value={form.monto} onChange={(event) => setForm({ ...form, monto: event.target.value })} placeholder="0.00" inputMode="decimal" type="number" min="0.01" step="0.01" aria-label="Pago mensual acordado en soles" />
             </div>
-            <small className="client-intake-field-help">Ingresa el monto en soles.</small>
           </label>
 
           <label className="client-intake-field">
             <span>Nombre del proyecto *</span>
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
-            <small className="client-intake-field-help">Puedes elegir cualquier nombre. Lo usaremos para identificar tus chats.</small>
           </label>
             </div>
           </section>
@@ -216,13 +213,12 @@ export function ClientIntakeForm() {
           <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>3</span>
-              <div><strong>Dispositivos y pago</strong><small>Selecciona dónde usarás el servicio.</small></div>
+              <div><strong>Dispositivos y pago</strong></div>
             </div>
             <div className="client-intake-section-grid">
 
           <fieldset className="client-intake-field client-intake-field--wide client-intake-devices">
             <legend>¿En qué dispositivo usarás el servicio? *</legend>
-            <p className="client-intake-device-help">Puedes seleccionar uno o varios.</p>
             <div className="client-intake-chip-list">
               {deviceOptions.map((device) => (
                 <button type="button" key={device} aria-pressed={form.dispositivos.includes(device)} className={form.dispositivos.includes(device) ? 'is-selected' : ''} onClick={() => toggleDevice(device)}>
@@ -250,7 +246,6 @@ export function ClientIntakeForm() {
           <label className="client-intake-field">
             <span>¿En cuántos dispositivos lo usarás? *</span>
             <input value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: event.target.value })} type="number" min={Math.max(1, selectedDeviceCount)} max="50" />
-            <small className="client-intake-field-help">Tu servicio incluye 1 dispositivo.</small>
           </label>
 
           <label className="client-intake-field">
