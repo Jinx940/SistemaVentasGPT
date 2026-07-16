@@ -162,10 +162,12 @@ export function ClientIntakeForm() {
         <form className="client-intake-form" onSubmit={submit}>
           {error && <div className="client-intake-error" role="alert">{error}</div>}
 
-          <div className="client-intake-section-title">
-            <span>1</span>
-            <div><strong>Datos de contacto</strong><small>Para identificarte y comunicarnos contigo.</small></div>
-          </div>
+          <section className="client-intake-form-section">
+            <div className="client-intake-section-title">
+              <span>1</span>
+              <div><strong>Datos de contacto</strong><small>Para identificarte y comunicarnos contigo.</small></div>
+            </div>
+            <div className="client-intake-section-grid">
 
           <label className="client-intake-field client-intake-field--wide">
             <span>Nombre completo *</span>
@@ -184,11 +186,15 @@ export function ClientIntakeForm() {
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
             <small className="client-intake-field-help">Te contactaremos a este número para confirmar el servicio.</small>
           </label>
+            </div>
+          </section>
 
-          <div className="client-intake-section-title">
-            <span>2</span>
-            <div><strong>Información del servicio</strong><small>Indica el pago acordado y cómo quieres identificar tus chats.</small></div>
-          </div>
+          <section className="client-intake-form-section">
+            <div className="client-intake-section-title">
+              <span>2</span>
+              <div><strong>Información del servicio</strong><small>Indica el pago acordado y cómo quieres identificar tus chats.</small></div>
+            </div>
+            <div className="client-intake-section-grid">
 
           <label className="client-intake-field">
             <span>Pago mensual acordado *</span>
@@ -204,11 +210,15 @@ export function ClientIntakeForm() {
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
             <small className="client-intake-field-help">Puedes elegir cualquier nombre. Lo usaremos para identificar tus chats.</small>
           </label>
+            </div>
+          </section>
 
-          <div className="client-intake-section-title">
-            <span>3</span>
-            <div><strong>Dispositivos y pago</strong><small>Selecciona dónde usarás el servicio.</small></div>
-          </div>
+          <section className="client-intake-form-section">
+            <div className="client-intake-section-title">
+              <span>3</span>
+              <div><strong>Dispositivos y pago</strong><small>Selecciona dónde usarás el servicio.</small></div>
+            </div>
+            <div className="client-intake-section-grid">
 
           <fieldset className="client-intake-field client-intake-field--wide client-intake-devices">
             <legend>¿En qué dispositivo usarás el servicio? *</legend>
@@ -265,6 +275,8 @@ export function ClientIntakeForm() {
             <span>Observación</span>
             <textarea value={form.observacion} onChange={(event) => setForm({ ...form, observacion: event.target.value })} rows={4} placeholder="Algún dato adicional que debamos saber" />
           </label>
+            </div>
+          </section>
 
           <label className="client-intake-honeypot" aria-hidden="true">
             Sitio web
