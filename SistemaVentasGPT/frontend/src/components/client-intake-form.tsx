@@ -15,6 +15,13 @@ const phoneCountries = [
 ]
 
 const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
+const formSteps = [
+  { number: 1, label: 'Contacto' },
+  { number: 2, label: 'Servicio' },
+  { number: 3, label: 'Dispositivos' },
+] as const
+
+type ClientFormStep = 1 | 2 | 3
 
 type ClientFormState = {
   nombre: string
@@ -56,8 +63,13 @@ export function ClientIntakeForm() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requestId, setRequestId] = useState<number | null>(null)
+  const [currentStep, setCurrentStep] = useState<ClientFormStep>(1)
   const todayLabel = useMemo(getTodayLabel, [])
-  const selectedDeviceCount = form.dispositivos.length + (form.otroDispositivo.trim() ? 1 : 0)
+  const selectedDevices = [
+    ...form.dispositivos,
+    form.otroDispositivo.trim(),
+  ].filter(Boolean)
+  const selectedDeviceCount = selectedDevices.length
   const additionalDeviceCount = Math.max(0, selectedDeviceCount - 1)
 
   function toggleDevice(device: string) {
@@ -72,21 +84,56 @@ export function ClientIntakeForm() {
     })
   }
 
+  function getStepError(step: ClientFormStep) {
+    if (step === 1) {
+      if (!form.nombre.trim()) return 'Escribe tu nombre completo.'
+      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de WhatsApp válido.'
+    }
+
+    if (step === 2) {
+      if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
+      if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
+    }
+
+    if (step === 3 && !selectedDevices.length) return 'Selecciona al menos un dispositivo.'
+    return ''
+  }
+
+  function showStep(step: ClientFormStep) {
+    setError('')
+    setCurrentStep(step)
+  }
+
+  function advanceStep() {
+    const stepError = getStepError(currentStep)
+    if (stepError) {
+      setError(stepError)
+      return
+    }
+
+    setError('')
+    if (currentStep < 3) setCurrentStep((currentStep + 1) as ClientFormStep)
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault()
+
+    if (currentStep < 3) {
+      advanceStep()
+      return
+    }
+
     setError('')
 
     const phoneDigits = form.telefono.replace(/\D/g, '')
-    const selectedDevices = [
-      ...form.dispositivos,
-      form.otroDispositivo.trim(),
-    ].filter(Boolean)
-
-    if (!form.nombre.trim()) return setError('Escribe tu nombre completo.')
-    if (phoneDigits.length < 7) return setError('Escribe un número de WhatsApp válido.')
-    if (Number(form.monto) <= 0) return setError('Escribe el monto acordado.')
-    if (!form.carpeta.trim()) return setError('Escribe un nombre para identificar tu proyecto y tus chats.')
-    if (!selectedDevices.length) return setError('Selecciona al menos un dispositivo.')
+    for (const step of [1, 2, 3] as const) {
+      const stepError = getStepError(step)
+      if (stepError) {
+        setCurrentStep(step)
+        setError(stepError)
+        return
+      }
+    }
     try {
       setSubmitting(true)
       const response = await submitClientRequest({
@@ -119,7 +166,7 @@ export function ClientIntakeForm() {
             Tu solicitud <strong>#{requestId}</strong> quedó pendiente de revisión. El administrador
             podrá aprobarla o contactarte si necesita confirmar algún dato.
           </p>
-          <button type="button" onClick={() => { setForm(emptyForm); setRequestId(null) }}>
+          <button type="button" onClick={() => { setForm(emptyForm); setCurrentStep(1); setRequestId(null) }}>
             Enviar otra solicitud
           </button>
         </section>
@@ -144,10 +191,30 @@ export function ClientIntakeForm() {
           <span>Tu fecha de inicio será <strong>{todayLabel}</strong>. La confirmaremos antes de aprobar tu solicitud.</span>
         </div>
 
+        <nav className="client-intake-steps" aria-label="Progreso del formulario">
+          {formSteps.map((step) => {
+            const isActive = currentStep === step.number
+            const isComplete = currentStep > step.number
+            return (
+              <button
+                type="button"
+                key={step.number}
+                className={`${isActive ? 'is-active' : ''} ${isComplete ? 'is-complete' : ''}`.trim()}
+                aria-current={isActive ? 'step' : undefined}
+                disabled={step.number > currentStep}
+                onClick={() => showStep(step.number)}
+              >
+                <span>{isComplete ? '✓' : step.number}</span>
+                <strong>{step.label}</strong>
+              </button>
+            )
+          })}
+        </nav>
+
         <form className="client-intake-form" onSubmit={submit}>
           {error && <div className="client-intake-error" role="alert">{error}</div>}
 
-          <section className="client-intake-form-section">
+          {currentStep === 1 && <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>1</span>
               <div><strong>Datos de contacto</strong></div>
@@ -171,9 +238,9 @@ export function ClientIntakeForm() {
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
           </label>
             </div>
-          </section>
+          </section>}
 
-          <section className="client-intake-form-section">
+          {currentStep === 2 && <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>2</span>
               <div><strong>Información del servicio</strong></div>
@@ -193,9 +260,9 @@ export function ClientIntakeForm() {
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
           </label>
             </div>
-          </section>
+          </section>}
 
-          <section className="client-intake-form-section">
+          {currentStep === 3 && <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>3</span>
               <div><strong>Dispositivos y pago</strong></div>
@@ -246,16 +313,23 @@ export function ClientIntakeForm() {
             <textarea value={form.observacion} onChange={(event) => setForm({ ...form, observacion: event.target.value })} rows={4} placeholder="Algún dato adicional que debamos saber" />
           </label>
             </div>
-          </section>
+          </section>}
 
           <label className="client-intake-honeypot" aria-hidden="true">
             Sitio web
             <input value={form.website} onChange={(event) => setForm({ ...form, website: event.target.value })} tabIndex={-1} autoComplete="off" />
           </label>
 
-          <button className="client-intake-submit" type="submit" disabled={submitting}>
-            {submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}
-          </button>
+          <div className="client-intake-actions">
+            {currentStep > 1 && (
+              <button className="client-intake-back" type="button" onClick={() => showStep((currentStep - 1) as ClientFormStep)}>
+                Anterior
+              </button>
+            )}
+            <button className="client-intake-submit" type="submit" disabled={submitting}>
+              {currentStep < 3 ? 'Siguiente' : submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}
+            </button>
+          </div>
           <p className="client-intake-privacy">Tus datos solo se usarán para registrar y administrar el servicio solicitado.</p>
         </form>
       </section>

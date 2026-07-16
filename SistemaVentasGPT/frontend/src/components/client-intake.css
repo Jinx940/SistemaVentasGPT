@@ -76,6 +76,62 @@
   line-height: 1.5;
 }
 
+.client-intake-steps {
+  margin: 20px 32px 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.client-intake-steps button {
+  min-width: 0;
+  padding: 10px 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 12px;
+  color: #718096;
+  background: rgba(15, 23, 42, 0.46);
+  cursor: pointer;
+}
+
+.client-intake-steps button > span {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.7);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.client-intake-steps button strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-intake-steps button.is-active {
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #eff6ff;
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.client-intake-steps button.is-active > span,
+.client-intake-steps button.is-complete > span {
+  color: #eff6ff;
+  background: #2563eb;
+}
+
+.client-intake-steps button.is-complete { color: #bfdbfe; }
+.client-intake-steps button:disabled { cursor: default; opacity: 0.62; }
+
 .client-intake-form {
   padding: 25px 32px 32px;
   display: grid;
@@ -89,6 +145,12 @@
   border: 1px solid rgba(148, 163, 184, 0.13);
   border-radius: 18px;
   background: rgba(15, 23, 42, 0.42);
+  animation: client-intake-step-in 0.2s ease-out;
+}
+
+@keyframes client-intake-step-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .client-intake-section-grid {
@@ -246,6 +308,28 @@
   box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
 }
 .client-intake-submit:disabled { opacity: 0.65; cursor: wait; }
+
+.client-intake-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.client-intake-actions button { min-height: 48px; }
+.client-intake-actions .client-intake-submit { flex: 1 1 65%; }
+.client-intake-back {
+  flex: 1 1 35%;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: #dbeafe;
+  background: #111827;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.client-intake-back:hover { border-color: #475569; background: #172033; }
 .client-intake-privacy { margin: -4px 0 0; text-align: center; color: #64748b; font-size: 12px; }
 .client-intake-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
@@ -260,6 +344,10 @@
   .client-intake-header h1 { font-size: clamp(25px, 8vw, 31px); }
   .client-intake-header p:last-child { font-size: 13px; }
   .client-intake-date { margin: 17px 16px 0; padding: 12px 13px; font-size: 12px; }
+  .client-intake-steps { margin: 15px 16px 0; gap: 6px; }
+  .client-intake-steps button { padding: 8px 5px; gap: 5px; }
+  .client-intake-steps button > span { width: 23px; height: 23px; }
+  .client-intake-steps button strong { font-size: 11px; }
   .client-intake-form { padding: 21px 16px calc(30px + env(safe-area-inset-bottom, 0px)); gap: 16px; }
   .client-intake-form-section { padding: 17px 15px; border-radius: 16px; }
   .client-intake-section-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -277,6 +365,7 @@
   .client-intake-chip-list button { min-height: 44px; padding: 10px 8px; }
   .client-intake-device-cost { margin-top: 0; padding: 14px; font-size: 13px; }
   .client-intake-submit { min-height: 52px; font-size: 16px; }
+  .client-intake-actions { gap: 9px; }
   .client-intake-success { min-height: 100vh; border: 0; border-radius: 0; display: grid; align-content: center; }
 }
 
@@ -288,6 +377,8 @@
 @media (max-width: 360px) {
   .client-intake-header { padding-inline: 14px; }
   .client-intake-date { margin-inline: 12px; }
+  .client-intake-steps { margin-inline: 12px; }
+  .client-intake-steps button strong { font-size: 10px; }
   .client-intake-form { padding-inline: 12px; }
   .client-intake-form-section { padding-inline: 13px; }
 }
