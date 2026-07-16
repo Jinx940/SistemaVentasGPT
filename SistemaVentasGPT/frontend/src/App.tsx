@@ -88,6 +88,8 @@ import { SectionAccordion } from './components/section-accordion'
 import { SidebarNav } from './components/sidebar'
 import { AuthCard } from './components/auth-card'
 import { AppIcon } from './components/icons'
+import { ClientIntakeForm } from './components/client-intake-form'
+import { ClientRequestInbox } from './components/client-request-inbox'
 import {
   addMonthsToInputDate,
   formatCurrencyPen,
@@ -1178,7 +1180,7 @@ function buildDashboardParams(dateFrom: string, dateTo: string): DashboardResume
   }
 }
 
-function App() {
+function AdminApp() {
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1280 : window.innerWidth,
@@ -7265,6 +7267,22 @@ function App() {
               </div>
             )}
 
+            {isAdmin && (
+              <ClientRequestInbox
+                isMobile={isMobile}
+                onApproved={async () => {
+                  await Promise.all([
+                    cargarClientes(),
+                    cargarVentas(),
+                    cargarDashboard(),
+                    cargarPagos(),
+                    cargarPagosResumen(),
+                    cargarActividad(),
+                  ])
+                }}
+              />
+            )}
+
             {activeTab !== 'morosos' && (
               <FloatingMorososButton
                 count={morososPendientesCount}
@@ -7281,6 +7299,11 @@ function App() {
       </div>
     </div>
   )
+}
+
+function App() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  return path === '/formulario-cliente' ? <ClientIntakeForm /> : <AdminApp />
 }
 
 const cardStyle: React.CSSProperties = {
