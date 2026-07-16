@@ -56,26 +56,6 @@
   line-height: 1.15;
 }
 
-.client-intake-header p:last-child {
-  margin: 9px 0 0;
-  color: #94a3b8;
-  line-height: 1.55;
-}
-
-.client-intake-date {
-  margin: 22px 32px 0;
-  padding: 13px 15px;
-  display: flex;
-  gap: 11px;
-  align-items: flex-start;
-  border: 1px solid rgba(34, 197, 94, 0.25);
-  border-radius: 14px;
-  color: #bbf7d0;
-  background: rgba(20, 83, 45, 0.2);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .client-intake-steps {
   margin: 20px 32px 0;
   display: grid;
@@ -170,8 +150,7 @@
 
 .client-intake-field--wide,
 .client-intake-error,
-.client-intake-submit,
-.client-intake-privacy {
+.client-intake-submit {
   grid-column: 1 / -1;
 }
 
@@ -330,7 +309,6 @@
 }
 
 .client-intake-back:hover { border-color: #475569; background: #172033; }
-.client-intake-privacy { margin: -4px 0 0; text-align: center; color: #64748b; font-size: 12px; }
 .client-intake-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
 .client-intake-success { padding: 48px 38px; text-align: center; }
@@ -342,8 +320,6 @@
   .client-intake-header { padding: 23px 18px 19px; gap: 13px; }
   .client-intake-brand { width: 46px; height: 46px; border-radius: 15px; }
   .client-intake-header h1 { font-size: clamp(25px, 8vw, 31px); }
-  .client-intake-header p:last-child { font-size: 13px; }
-  .client-intake-date { margin: 17px 16px 0; padding: 12px 13px; font-size: 12px; }
   .client-intake-steps { margin: 15px 16px 0; gap: 6px; }
   .client-intake-steps button { padding: 8px 5px; gap: 5px; }
   .client-intake-steps button > span { width: 23px; height: 23px; }
@@ -354,8 +330,7 @@
   .client-intake-field--wide,
   .client-intake-error,
   .client-intake-device-cost,
-  .client-intake-submit,
-  .client-intake-privacy { grid-column: 1; }
+  .client-intake-submit { grid-column: 1; }
   .client-intake-section-title { margin-bottom: 16px; }
   .client-intake-field input,
   .client-intake-field select,
@@ -376,7 +351,6 @@
 
 @media (max-width: 360px) {
   .client-intake-header { padding-inline: 14px; }
-  .client-intake-date { margin-inline: 12px; }
   .client-intake-steps { margin-inline: 12px; }
   .client-intake-steps button strong { font-size: 10px; }
   .client-intake-form { padding-inline: 12px; }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { getErrorMessage, submitClientRequest } from '../api'
 import { AppIcon } from './icons'
 import './client-intake.css'
@@ -49,22 +49,12 @@ const emptyForm: ClientFormState = {
   website: '',
 }
 
-function getTodayLabel() {
-  return new Intl.DateTimeFormat('es-PE', {
-    timeZone: 'America/Lima',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date())
-}
-
 export function ClientIntakeForm() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requestId, setRequestId] = useState<number | null>(null)
   const [currentStep, setCurrentStep] = useState<ClientFormStep>(1)
-  const todayLabel = useMemo(getTodayLabel, [])
   const selectedDevices = [
     ...form.dispositivos,
     form.otroDispositivo.trim(),
@@ -182,14 +172,8 @@ export function ClientIntakeForm() {
           <div>
             <p className="client-intake-eyebrow">SISTEMA DE COBRO</p>
             <h1>Solicita tu servicio</h1>
-            <p>Completa este formulario. Revisaremos tus datos antes de activar el servicio.</p>
           </div>
         </header>
-
-        <div className="client-intake-date">
-          <AppIcon name="historial" size={19} />
-          <span>Tu fecha de inicio será <strong>{todayLabel}</strong>. La confirmaremos antes de aprobar tu solicitud.</span>
-        </div>
 
         <nav className="client-intake-steps" aria-label="Progreso del formulario">
           {formSteps.map((step) => {
@@ -330,7 +314,6 @@ export function ClientIntakeForm() {
               {currentStep < 3 ? 'Siguiente' : submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}
             </button>
           </div>
-          <p className="client-intake-privacy">Tus datos solo se usarán para registrar y administrar el servicio solicitado.</p>
         </form>
       </section>
     </main>
