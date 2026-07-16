@@ -23,6 +23,9 @@ const allowAllCorsOrigins = allowedCorsOrigins.includes('*');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  max: Math.max(1, Number(process.env.DATABASE_POOL_MAX) || 5),
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 10000,
 });
 
 const adapter = new PrismaPg(pool);
@@ -105,6 +108,35 @@ const ESTADO_DB_TO_UI = {
 
 function cleanText(value) {
   return String(value ?? '').trim();
+}
+
+function getPublicBackendUrl() {
+  const configuredUrl = cleanText(process.env.PUBLIC_BACKEND_URL).replace(/\/$/, '');
+  if (configuredUrl) return configuredUrl;
+
+  const vercelProductionUrl = cleanText(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+  if (vercelProductionUrl) return `https://${vercelProductionUrl.replace(/^https?:\/\//, '')}`;
+
+  return `http://localhost:${Number(process.env.PORT) || 3001}`;
+}
+
+function getDefaultWhatsAppWebhookUrl() {
+  return `${getPublicBackendUrl()}/webhooks/whatsapp`;
+}
+
+function requireCronSecret(req, res, next) {
+  const cronSecret = cleanText(process.env.CRON_SECRET);
+  const authorization = cleanText(req.headers.authorization);
+
+  if (!cronSecret) {
+    return res.status(503).json({ error: 'CRON_SECRET no esta configurado.' });
+  }
+
+  if (authorization !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ error: 'Cron no autorizado.' });
+  }
+
+  next();
 }
 
 function hashToken(token) {
@@ -1536,7 +1568,7 @@ async function getWhatsAppSettings() {
   const cfg = await getConfigMap();
   const defaultGraphVersion = 'v25.0';
   const defaultPhoneNumberId = '977660538773451';
-  const defaultWebhookUrl = 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp';
+  const defaultWebhookUrl = getDefaultWhatsAppWebhookUrl();
   const defaultWebhookVerifyToken = 'sistema-cobro-whatsapp';
   const defaultNotifyPhone = '989267132';
   const defaultDueTodayTemplateName = 'gpt_vence_hoy';
@@ -1589,8 +1621,8 @@ async function getWhatsAppSettings() {
     process.env.WA_WEBHOOK_VERIFY_TOKEN ||
     defaultWebhookVerifyToken;
   const webhookUrl =
-    cfg.WA_WEBHOOK_URL ||
     process.env.WA_WEBHOOK_URL ||
+    cfg.WA_WEBHOOK_URL ||
     defaultWebhookUrl;
   const notifyPhone =
     cfg.WA_NOTIFY_PHONE ||
@@ -3971,7 +4003,7 @@ app.put('/config/whatsapp', requireRole('ADMIN'), async (req, res) => {
   try {
     const defaultGraphVersion = 'v25.0';
     const defaultPhoneNumberId = '977660538773451';
-    const defaultWebhookUrl = 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp';
+    const defaultWebhookUrl = getDefaultWhatsAppWebhookUrl();
     const defaultWebhookVerifyToken = 'sistema-cobro-whatsapp';
     const defaultNotifyPhone = '989267132';
     const defaultDueTodayTemplateName = 'gpt_vence_hoy';
@@ -5532,6 +5564,34 @@ app.delete('/maintenance/clear-history', requireRole('ADMIN'), async (req, res) 
   }
 });
 
+app.get('/cron/system-backup', requireCronSecret, async (req, res) => {
+  try {
+    const result = await runAutomaticSystemBackup();
+    res.json({ ok: true, created: !!result, result });
+  } catch (error) {
+    console.error('[VERCEL_CRON] Error creando respaldo automatico:', error);
+    res.status(500).json({ error: 'Error creando el respaldo automatico.' });
+  }
+});
+
+app.get('/cron/whatsapp-reminders', requireCronSecret, async (req, res) => {
+  try {
+    if (!WHATSAPP_AUTO_SEND_ENABLED) {
+      return res.json({ ok: true, disabled: true, message: 'Recordatorios automaticos desactivados.' });
+    }
+
+    res.json(
+      await executeWhatsAppReminders({
+        usuarioId: null,
+        trigger: 'VERCEL_CRON',
+      })
+    );
+  } catch (error) {
+    console.error('[VERCEL_CRON] Error enviando recordatorios:', error);
+    res.status(500).json({ error: 'Error enviando recordatorios automaticos.' });
+  }
+});
+
 const PORT = Number(process.env.PORT) || 3001;
 
 app.get('/dashboard/resumen', requireAuth, async (req, res) => {
@@ -5545,8 +5605,12 @@ app.get('/dashboard/resumen', requireAuth, async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-  startWhatsAppReminderScheduler();
-  startSystemBackupScheduler();
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+    startWhatsAppReminderScheduler();
+    startSystemBackupScheduler();
+  });
+}
+
+module.exports = app;
