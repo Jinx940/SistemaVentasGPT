@@ -314,7 +314,7 @@ function normalizeWebhookUrl(value: string) {
 function isPlaceholderWebhookUrl(value: string) {
   const normalized = normalizeWebhookUrl(value).toLowerCase()
   return (
-    normalized.includes('tu-backend.onrender.com') ||
+    normalized.includes('.onrender.com') ||
     normalized.includes('example.com') ||
     normalized.includes('mi-backend')
   )
@@ -386,7 +386,7 @@ const defaultWhatsAppConfig: WhatsAppConfig = {
   enabled: false,
   graphVersion: 'v25.0',
   phoneNumberId: '977660538773451',
-  webhookUrl: 'https://sistema-ventas-gpt-backend.onrender.com/webhooks/whatsapp',
+  webhookUrl: `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')}/webhooks/whatsapp`,
   webhookVerifyToken: 'sistema-cobro-whatsapp',
   notifyPhone: '989267132',
   replyAlertTemplateName: 'gpt_alerta_respuesta',

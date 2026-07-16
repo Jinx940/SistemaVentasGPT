@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/cron/system-backup",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/cron/whatsapp-reminders",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}
