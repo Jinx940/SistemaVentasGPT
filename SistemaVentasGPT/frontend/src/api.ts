@@ -39,7 +39,10 @@ import type {
   WhatsAppTestResponse,
 } from './types'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const configuredApiBase = import.meta.env.VITE_API_URL?.trim()
+export const API_BASE = (
+  configuredApiBase || (import.meta.env.PROD ? '/api' : 'http://localhost:3001')
+).replace(/\/$/, '')
 const AUTH_TOKEN_KEY = 'sistema-cobro-auth-token'
 
 type QueryValue = string | number | boolean | null | undefined
