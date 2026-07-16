@@ -104,6 +104,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
 
     if (!form.nombre.trim() || !form.telefono.trim()) return setError('Nombre y teléfono son obligatorios.')
     if (Number(form.monto) <= 0) return setError('El monto debe ser mayor a cero.')
+    if (!form.carpeta.trim()) return setError('El nombre del proyecto es obligatorio.')
     if (!form.fechaInicio || !form.fechaCierre) return setError('Revisa las fechas del servicio.')
 
     try {
@@ -221,9 +222,13 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
                     <label><span>Fecha de inicio</span><input type="date" value={form.fechaInicio} onChange={(event) => setForm({ ...form, fechaInicio: event.target.value })} /></label>
                     <label><span>Fecha de cierre</span><input type="date" value={form.fechaCierre} onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })} /></label>
                     <label><span>Estado de pago</span><select value={form.estadoVenta} onChange={(event) => setForm({ ...form, estadoVenta: event.target.value as 'PAGADO' | 'PENDIENTE' })}><option value="PENDIENTE">Pendiente</option><option value="PAGADO">Pagado</option></select></label>
-                    <label><span>Cantidad de dispositivos</span><input type="number" min="1" value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: Number(event.target.value) })} /></label>
+                    <label>
+                      <span>Cantidad de dispositivos</span>
+                      <input type="number" min="1" value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: Number(event.target.value) })} />
+                      {Number(form.cantidadDispositivos) > 1 && <small style={{ color: '#fbbf24' }}>Confirma con el cliente el costo de los dispositivos adicionales.</small>}
+                    </label>
                     <label className="is-wide"><span>Dispositivos</span><input value={form.tipoDispositivo} onChange={(event) => setForm({ ...form, tipoDispositivo: event.target.value })} /></label>
-                    <label className="is-wide"><span>Plan, servicio o carpeta</span><input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} /></label>
+                    <label className="is-wide"><span>Nombre del proyecto</span><input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Nombre para identificar sus chats" /></label>
                     <label className="is-wide"><span>Observación</span><textarea rows={3} value={form.observacion} onChange={(event) => setForm({ ...form, observacion: event.target.value })} /></label>
                     <label className="is-wide"><span>Motivo de rechazo (opcional)</span><input value={form.motivoRechazo} onChange={(event) => setForm({ ...form, motivoRechazo: event.target.value })} placeholder="Solo se guardará si rechazas" /></label>
 

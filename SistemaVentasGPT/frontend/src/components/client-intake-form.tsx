@@ -59,14 +59,25 @@ export function ClientIntakeForm() {
   const [error, setError] = useState('')
   const [requestId, setRequestId] = useState<number | null>(null)
   const todayLabel = useMemo(getTodayLabel, [])
+  const selectedDeviceCount = form.dispositivos.length + (form.otroDispositivo.trim() ? 1 : 0)
+  const requestedDeviceCount = Math.max(Number(form.cantidadDispositivos) || 0, selectedDeviceCount)
+  const additionalDeviceCount = Math.max(0, requestedDeviceCount - 1)
 
   function toggleDevice(device: string) {
-    setForm((current) => ({
-      ...current,
-      dispositivos: current.dispositivos.includes(device)
+    setForm((current) => {
+      const dispositivos = current.dispositivos.includes(device)
         ? current.dispositivos.filter((item) => item !== device)
-        : [...current.dispositivos, device],
-    }))
+        : [...current.dispositivos, device]
+      const minimumCount = dispositivos.length + (current.otroDispositivo.trim() ? 1 : 0)
+
+      return {
+        ...current,
+        dispositivos,
+        cantidadDispositivos: String(
+          Math.max(Number(current.cantidadDispositivos) || 1, minimumCount),
+        ),
+      }
+    })
   }
 
   async function submit(event: React.FormEvent) {
@@ -82,9 +93,13 @@ export function ClientIntakeForm() {
     if (!form.nombre.trim()) return setError('Escribe tu nombre completo.')
     if (phoneDigits.length < 7) return setError('Escribe un número de WhatsApp válido.')
     if (Number(form.monto) <= 0) return setError('Escribe el monto acordado.')
+    if (!form.carpeta.trim()) return setError('Escribe un nombre para identificar tu proyecto y tus chats.')
     if (!selectedDevices.length) return setError('Selecciona al menos un dispositivo.')
     if (Number(form.cantidadDispositivos) <= 0) {
       return setError('La cantidad de dispositivos debe ser mayor a cero.')
+    }
+    if (Number(form.cantidadDispositivos) < selectedDevices.length) {
+      return setError('La cantidad no puede ser menor al número de dispositivos seleccionados.')
     }
 
     try {
@@ -170,8 +185,9 @@ export function ClientIntakeForm() {
           </label>
 
           <label className="client-intake-field">
-            <span>Plan, servicio o carpeta</span>
-            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Plan mensual" />
+            <span>Nombre del proyecto *</span>
+            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Chats de mi negocio" />
+            <small className="client-intake-field-help">Elige cualquier nombre que te ayude a identificar tus chats.</small>
           </label>
 
           <fieldset className="client-intake-field client-intake-field--wide client-intake-devices">
@@ -183,12 +199,26 @@ export function ClientIntakeForm() {
                 </button>
               ))}
             </div>
-            <input value={form.otroDispositivo} onChange={(event) => setForm({ ...form, otroDispositivo: event.target.value })} placeholder="Otro dispositivo (opcional)" />
+            <input
+              value={form.otroDispositivo}
+              onChange={(event) => {
+                const otroDispositivo = event.target.value
+                const minimumCount = form.dispositivos.length + (otroDispositivo.trim() ? 1 : 0)
+                setForm({
+                  ...form,
+                  otroDispositivo,
+                  cantidadDispositivos: String(
+                    Math.max(Number(form.cantidadDispositivos) || 1, minimumCount),
+                  ),
+                })
+              }}
+              placeholder="Otro dispositivo (opcional)"
+            />
           </fieldset>
 
           <label className="client-intake-field">
             <span>Cantidad de dispositivos *</span>
-            <input value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: event.target.value })} type="number" min="1" max="50" />
+            <input value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: event.target.value })} type="number" min={Math.max(1, selectedDeviceCount)} max="50" />
           </label>
 
           <label className="client-intake-field">
@@ -198,6 +228,16 @@ export function ClientIntakeForm() {
               <option value="SI">Sí, ya pagué</option>
             </select>
           </label>
+
+          {additionalDeviceCount > 0 && (
+            <div className="client-intake-device-cost" role="note">
+              <AppIcon name="pago" size={20} />
+              <span>
+                <strong>{additionalDeviceCount === 1 ? 'Solicitas 1 dispositivo adicional.' : `Solicitas ${additionalDeviceCount} dispositivos adicionales.`}</strong>
+                El primer dispositivo está incluido. Cada dispositivo adicional tiene un costo extra que el administrador te confirmará antes de aprobar.
+              </span>
+            </div>
+          )}
 
           <label className="client-intake-field client-intake-field--wide">
             <span>Observación</span>
