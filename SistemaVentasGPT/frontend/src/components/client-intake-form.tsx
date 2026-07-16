@@ -149,18 +149,23 @@ export function ClientIntakeForm() {
           <div className="client-intake-brand"><AppIcon name="clientes" size={26} /></div>
           <div>
             <p className="client-intake-eyebrow">SISTEMA DE COBRO</p>
-            <h1>Formulario de cliente</h1>
-            <p>Completa tus datos para registrar el servicio. Solo toma unos minutos.</p>
+            <h1>Solicita tu servicio</h1>
+            <p>Completa este formulario. Revisaremos tus datos antes de activar el servicio.</p>
           </div>
         </header>
 
         <div className="client-intake-date">
           <AppIcon name="historial" size={19} />
-          <span>La fecha de inicio será hoy, <strong>{todayLabel}</strong>. El administrador podrá corregirla antes de aprobar.</span>
+          <span>Tu fecha de inicio será <strong>{todayLabel}</strong>. La confirmaremos antes de aprobar tu solicitud.</span>
         </div>
 
         <form className="client-intake-form" onSubmit={submit}>
           {error && <div className="client-intake-error" role="alert">{error}</div>}
+
+          <div className="client-intake-section-title">
+            <span>1</span>
+            <div><strong>Datos de contacto</strong><small>Para identificarte y comunicarnos contigo.</small></div>
+          </div>
 
           <label className="client-intake-field client-intake-field--wide">
             <span>Nombre completo *</span>
@@ -177,24 +182,40 @@ export function ClientIntakeForm() {
           <label className="client-intake-field">
             <span>WhatsApp *</span>
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
+            <small className="client-intake-field-help">Te contactaremos a este número para confirmar el servicio.</small>
           </label>
 
+          <div className="client-intake-section-title">
+            <span>2</span>
+            <div><strong>Información del servicio</strong><small>Indica el pago acordado y cómo quieres identificar tus chats.</small></div>
+          </div>
+
           <label className="client-intake-field">
-            <span>Monto acordado (S/) *</span>
-            <input value={form.monto} onChange={(event) => setForm({ ...form, monto: event.target.value })} placeholder="0.00" inputMode="decimal" type="number" min="0.01" step="0.01" />
+            <span>Pago mensual acordado *</span>
+            <div className="client-intake-money-input">
+              <strong>S/</strong>
+              <input value={form.monto} onChange={(event) => setForm({ ...form, monto: event.target.value })} placeholder="0.00" inputMode="decimal" type="number" min="0.01" step="0.01" aria-label="Pago mensual acordado en soles" />
+            </div>
+            <small className="client-intake-field-help">Ingresa el monto en soles.</small>
           </label>
 
           <label className="client-intake-field">
             <span>Nombre del proyecto *</span>
-            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Chats de mi negocio" />
-            <small className="client-intake-field-help">Elige cualquier nombre que te ayude a identificar tus chats.</small>
+            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
+            <small className="client-intake-field-help">Puedes elegir cualquier nombre. Lo usaremos para identificar tus chats.</small>
           </label>
+
+          <div className="client-intake-section-title">
+            <span>3</span>
+            <div><strong>Dispositivos y pago</strong><small>Selecciona dónde usarás el servicio.</small></div>
+          </div>
 
           <fieldset className="client-intake-field client-intake-field--wide client-intake-devices">
             <legend>¿En qué dispositivo usarás el servicio? *</legend>
+            <p className="client-intake-device-help">Puedes seleccionar uno o varios.</p>
             <div className="client-intake-chip-list">
               {deviceOptions.map((device) => (
-                <button type="button" key={device} className={form.dispositivos.includes(device) ? 'is-selected' : ''} onClick={() => toggleDevice(device)}>
+                <button type="button" key={device} aria-pressed={form.dispositivos.includes(device)} className={form.dispositivos.includes(device) ? 'is-selected' : ''} onClick={() => toggleDevice(device)}>
                   {device}
                 </button>
               ))}
@@ -217,24 +238,25 @@ export function ClientIntakeForm() {
           </fieldset>
 
           <label className="client-intake-field">
-            <span>Cantidad de dispositivos *</span>
+            <span>¿En cuántos dispositivos lo usarás? *</span>
             <input value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: event.target.value })} type="number" min={Math.max(1, selectedDeviceCount)} max="50" />
+            <small className="client-intake-field-help">Tu servicio incluye 1 dispositivo.</small>
           </label>
 
           <label className="client-intake-field">
-            <span>¿Ya realizaste el pago? *</span>
+            <span>¿Ya realizaste el pago mensual? *</span>
             <select value={form.pagoRegistrado} onChange={(event) => setForm({ ...form, pagoRegistrado: event.target.value as 'SI' | 'NO' })}>
-              <option value="NO">No / pendiente</option>
-              <option value="SI">Sí, ya pagué</option>
+              <option value="NO">Aún no he pagado</option>
+              <option value="SI">Sí, ya realicé el pago</option>
             </select>
           </label>
 
           {additionalDeviceCount > 0 && (
             <div className="client-intake-device-cost" role="note">
-              <AppIcon name="pago" size={20} />
+              <span className="client-intake-currency-badge" aria-hidden="true">S/</span>
               <span>
-                <strong>{additionalDeviceCount === 1 ? 'Solicitas 1 dispositivo adicional.' : `Solicitas ${additionalDeviceCount} dispositivos adicionales.`}</strong>
-                El primer dispositivo está incluido. Cada dispositivo adicional tiene un costo extra que el administrador te confirmará antes de aprobar.
+                <strong>{additionalDeviceCount === 1 ? 'Has elegido 1 dispositivo adicional' : `Has elegido ${additionalDeviceCount} dispositivos adicionales`}</strong>
+                El primer dispositivo está incluido. Los adicionales tienen un costo en soles. Te confirmaremos el importe exacto antes de activar el servicio.
               </span>
             </div>
           )}
@@ -250,7 +272,7 @@ export function ClientIntakeForm() {
           </label>
 
           <button className="client-intake-submit" type="submit" disabled={submitting}>
-            {submitting ? 'Enviando...' : 'Enviar para revisión'}
+            {submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}
           </button>
           <p className="client-intake-privacy">Tus datos solo se usarán para registrar y administrar el servicio solicitado.</p>
         </form>

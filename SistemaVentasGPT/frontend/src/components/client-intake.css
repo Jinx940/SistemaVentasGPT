@@ -93,11 +93,38 @@
 }
 
 .client-intake-field--wide,
+.client-intake-section-title,
 .client-intake-error,
 .client-intake-submit,
 .client-intake-privacy {
   grid-column: 1 / -1;
 }
+
+.client-intake-section-title {
+  margin-top: 4px;
+  padding-top: 5px;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+}
+
+.client-intake-section-title > span {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, 0.3);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.client-intake-section-title strong,
+.client-intake-section-title small { display: block; }
+.client-intake-section-title strong { color: #f1f5f9; font-size: 15px; }
+.client-intake-section-title small { margin-top: 3px; color: #718096; font-size: 11px; line-height: 1.35; }
 
 .client-intake-field input,
 .client-intake-field select,
@@ -126,6 +153,22 @@
   line-height: 1.45;
 }
 
+.client-intake-money-input {
+  position: relative;
+}
+
+.client-intake-money-input > strong {
+  position: absolute;
+  z-index: 1;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #93c5fd;
+  font-size: 15px;
+}
+
+.client-intake-money-input input { padding-left: 48px; }
+
 .client-intake-device-cost {
   grid-column: 1 / -1;
   margin-top: -4px;
@@ -141,8 +184,21 @@
   line-height: 1.5;
 }
 
-.client-intake-device-cost svg { flex: 0 0 auto; margin-top: 2px; }
 .client-intake-device-cost strong { display: block; margin-bottom: 2px; color: #fef3c7; }
+
+.client-intake-currency-badge {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 10px;
+  color: #fde68a;
+  background: rgba(146, 64, 14, 0.28);
+  font-size: 12px;
+  font-weight: 900;
+}
 
 .client-intake-devices {
   margin: 0;
@@ -151,6 +207,7 @@
 }
 
 .client-intake-devices legend { margin-bottom: 10px; }
+.client-intake-device-help { margin: -4px 0 10px; color: #74839b; font-size: 11px; font-weight: 500; }
 
 .client-intake-chip-list { display: flex; flex-wrap: wrap; gap: 9px; }
 .client-intake-chip-list button {
@@ -197,13 +254,33 @@
 @media (max-width: 620px) {
   .client-intake-page { padding: 0; place-items: stretch; }
   .client-intake-shell { min-height: 100vh; border: 0; border-radius: 0; }
-  .client-intake-header { padding: 25px 20px 20px; }
-  .client-intake-date { margin: 18px 20px 0; }
-  .client-intake-form { padding: 22px 20px 28px; grid-template-columns: 1fr; }
+  .client-intake-header { padding: 23px 18px 19px; gap: 13px; }
+  .client-intake-brand { width: 46px; height: 46px; border-radius: 15px; }
+  .client-intake-header h1 { font-size: clamp(25px, 8vw, 31px); }
+  .client-intake-header p:last-child { font-size: 13px; }
+  .client-intake-date { margin: 17px 16px 0; padding: 12px 13px; font-size: 12px; }
+  .client-intake-form { padding: 21px 16px calc(30px + env(safe-area-inset-bottom, 0px)); grid-template-columns: 1fr; gap: 17px; }
   .client-intake-field--wide,
+  .client-intake-section-title,
   .client-intake-error,
   .client-intake-device-cost,
   .client-intake-submit,
   .client-intake-privacy { grid-column: 1; }
+  .client-intake-section-title { margin-top: 7px; }
+  .client-intake-field input,
+  .client-intake-field select,
+  .client-intake-field textarea { min-height: 48px; padding: 13px 14px; font-size: 16px; }
+  .client-intake-money-input input { padding-left: 48px; }
+  .client-intake-chip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .client-intake-chip-list button { min-height: 44px; padding: 10px 8px; }
+  .client-intake-device-cost { margin-top: 0; padding: 14px; font-size: 13px; }
+  .client-intake-submit { min-height: 52px; font-size: 16px; }
   .client-intake-success { min-height: 100vh; border: 0; border-radius: 0; display: grid; align-content: center; }
+}
+
+@media (max-width: 360px) {
+  .client-intake-header { padding-inline: 14px; }
+  .client-intake-date { margin-inline: 12px; }
+  .client-intake-form { padding-inline: 12px; }
+  .client-intake-chip-list { grid-template-columns: 1fr; }
 }
