@@ -572,6 +572,15 @@
   .client-intake-error,
   .client-intake-device-cost,
   .client-intake-submit { grid-column: 1; }
+  .client-intake-contact-grid {
+    grid-template-columns: minmax(112px, 0.78fr) minmax(0, 1.22fr);
+    column-gap: 10px;
+  }
+  .client-intake-contact-grid .client-intake-field--wide { grid-column: 1 / -1; }
+  .client-intake-country-trigger { gap: 7px; padding-inline: 10px; }
+  .client-intake-country-trigger .client-intake-country-name { display: none; }
+  .client-intake-country-trigger .client-intake-country-code { margin-left: 0; }
+  .client-intake-country-trigger .client-intake-country-chevron { margin-left: auto; }
   .client-intake-section-title { margin-bottom: 16px; }
   .client-intake-field input,
   .client-intake-field select,
@@ -620,5 +629,6 @@
   .client-intake-submit,
   .client-intake-back { transition: none; }
 }
+
 
 
