@@ -1,0 +1,182 @@
+.client-intake-page {
+  min-height: 100vh;
+  padding: 38px 18px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(37, 99, 235, 0.22), transparent 30%),
+    radial-gradient(circle at 92% 88%, rgba(14, 165, 233, 0.13), transparent 28%),
+    linear-gradient(145deg, #020617 0%, #0b1224 52%, #111827 100%);
+}
+
+.client-intake-shell,
+.client-intake-success {
+  width: min(780px, 100%);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 28px;
+  background: rgba(8, 15, 35, 0.94);
+  box-shadow: 0 32px 90px rgba(2, 6, 23, 0.58);
+  overflow: hidden;
+}
+
+.client-intake-header {
+  padding: 30px 32px 24px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.client-intake-brand,
+.client-intake-success__icon {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  color: #dbeafe;
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+  box-shadow: 0 14px 36px rgba(37, 99, 235, 0.3);
+}
+
+.client-intake-eyebrow {
+  margin: 0 0 7px;
+  color: #60a5fa !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.client-intake-header h1,
+.client-intake-success h1 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: clamp(25px, 5vw, 36px);
+  line-height: 1.15;
+}
+
+.client-intake-header p:last-child {
+  margin: 9px 0 0;
+  color: #94a3b8;
+  line-height: 1.55;
+}
+
+.client-intake-date {
+  margin: 22px 32px 0;
+  padding: 13px 15px;
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  border-radius: 14px;
+  color: #bbf7d0;
+  background: rgba(20, 83, 45, 0.2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.client-intake-form {
+  padding: 25px 32px 32px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.client-intake-field {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.client-intake-field--wide,
+.client-intake-error,
+.client-intake-submit,
+.client-intake-privacy {
+  grid-column: 1 / -1;
+}
+
+.client-intake-field input,
+.client-intake-field select,
+.client-intake-field textarea {
+  width: 100%;
+  border: 1px solid #26334b;
+  border-radius: 13px;
+  padding: 13px 14px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.86);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.client-intake-field input:focus,
+.client-intake-field select:focus,
+.client-intake-field textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.client-intake-devices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.client-intake-devices legend { margin-bottom: 10px; }
+
+.client-intake-chip-list { display: flex; flex-wrap: wrap; gap: 9px; }
+.client-intake-chip-list button {
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 9px 13px;
+  color: #cbd5e1;
+  background: #111827;
+  cursor: pointer;
+}
+.client-intake-chip-list button.is-selected {
+  border-color: #3b82f6;
+  color: #eff6ff;
+  background: rgba(37, 99, 235, 0.28);
+}
+
+.client-intake-error {
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 13px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.client-intake-submit,
+.client-intake-success button {
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  color: white;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.24);
+}
+.client-intake-submit:disabled { opacity: 0.65; cursor: wait; }
+.client-intake-privacy { margin: -4px 0 0; text-align: center; color: #64748b; font-size: 12px; }
+.client-intake-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
+.client-intake-success { padding: 48px 38px; text-align: center; }
+.client-intake-success__icon { margin: 0 auto 20px; width: 68px; height: 68px; border-radius: 22px; }
+.client-intake-success > p:not(.client-intake-eyebrow) { max-width: 560px; margin: 16px auto 26px; color: #aebbd0; line-height: 1.65; }
+
+@media (max-width: 620px) {
+  .client-intake-page { padding: 0; place-items: stretch; }
+  .client-intake-shell { min-height: 100vh; border: 0; border-radius: 0; }
+  .client-intake-header { padding: 25px 20px 20px; }
+  .client-intake-date { margin: 18px 20px 0; }
+  .client-intake-form { padding: 22px 20px 28px; grid-template-columns: 1fr; }
+  .client-intake-field--wide,
+  .client-intake-error,
+  .client-intake-submit,
+  .client-intake-privacy { grid-column: 1; }
+  .client-intake-success { min-height: 100vh; border: 0; border-radius: 0; display: grid; align-content: center; }
+}

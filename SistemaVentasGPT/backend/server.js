@@ -84,6 +84,7 @@ const SYSTEM_BACKUP_ENABLED =
   String(process.env.AUTO_BACKUP_ENABLED || 'true').toLowerCase() === 'true';
 
 const loginAttemptStore = new Map();
+const clientRequestRateStore = new Map();
 let whatsAppAutoReminderPromise = null;
 let systemBackupPromise = null;
 
@@ -341,6 +342,42 @@ function addMonthsPreserveDay(dateValue, months) {
   );
 }
 
+function getCurrentDateInputForTimeZone(timeZone = 'America/Lima') {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function getClientRequestRateKey(req) {
+  return (
+    cleanText(req.headers['x-forwarded-for']).split(',')[0] ||
+    cleanText(req.ip) ||
+    cleanText(req.socket?.remoteAddress) ||
+    'unknown'
+  );
+}
+
+function isClientRequestRateLimited(req) {
+  const key = getClientRequestRateKey(req);
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const current = clientRequestRateStore.get(key);
+
+  if (!current || current.startedAt + windowMs <= now) {
+    clientRequestRateStore.set(key, { count: 1, startedAt: now });
+    return false;
+  }
+
+  current.count += 1;
+  clientRequestRateStore.set(key, current);
+  return current.count > 5;
+}
+
 function formatDateForMessage(value) {
   if (!value) return '';
   const d = new Date(value);
@@ -553,6 +590,32 @@ function toVentaDto(venta, no = null) {
     updatedAt: toIsoDateTime(venta.updatedAt),
     cliente: toClienteDto(venta.cliente),
     cuentaAcceso: toCuentaAccesoDto(venta.cuentaAcceso),
+  };
+}
+
+function toSolicitudClienteDto(solicitud) {
+  if (!solicitud) return null;
+
+  return {
+    id: solicitud.id,
+    nombre: solicitud.nombre || '',
+    telefono: solicitud.telefono || '',
+    monto: moneyNumber(solicitud.monto),
+    carpeta: solicitud.carpeta || '',
+    observacion: solicitud.observacion || null,
+    tipoDispositivo: solicitud.tipoDispositivo || '',
+    cantidadDispositivos: Number(solicitud.cantidadDispositivos || 1),
+    pagoRegistrado: !!solicitud.pagoRegistrado,
+    fechaInicio: toIsoDateTime(solicitud.fechaInicio),
+    fechaCierre: toIsoDateTime(solicitud.fechaCierre),
+    estado: cleanText(solicitud.estado || 'PENDIENTE'),
+    motivoRechazo: solicitud.motivoRechazo || null,
+    clienteId: solicitud.clienteId ?? null,
+    ventaId: solicitud.ventaId ?? null,
+    revisadoPorId: solicitud.revisadoPorId ?? null,
+    revisadoAt: toIsoDateTime(solicitud.revisadoAt),
+    createdAt: toIsoDateTime(solicitud.createdAt),
+    updatedAt: toIsoDateTime(solicitud.updatedAt),
   };
 }
 
@@ -959,6 +1022,7 @@ function getBackupCountsFromSnapshot(snapshot) {
   return {
     usuarios: Array.isArray(data.usuarios) ? data.usuarios.length : 0,
     clientes: Array.isArray(data.clientes) ? data.clientes.length : 0,
+    solicitudesClientes: Array.isArray(data.solicitudesClientes) ? data.solicitudesClientes.length : 0,
     cuentas: Array.isArray(data.cuentas) ? data.cuentas.length : 0,
     ventas: Array.isArray(data.ventas) ? data.ventas.length : 0,
     pagos: Array.isArray(data.pagos) ? data.pagos.length : 0,
@@ -984,10 +1048,11 @@ function toSystemBackupSummary(storageKey, snapshot) {
 }
 
 async function getSystemDataCounts(client = prisma) {
-  const [usuarios, clientes, cuentas, ventas, pagos, historialBajas, whatsAppLogs, actividad, configuracion] =
+  const [usuarios, clientes, solicitudesClientes, cuentas, ventas, pagos, historialBajas, whatsAppLogs, actividad, configuracion] =
     await Promise.all([
       client.usuarioSistema.count(),
       client.cliente.count(),
+      client.solicitudCliente.count(),
       client.cuentaAcceso.count(),
       client.venta.count(),
       client.pago.count(),
@@ -1010,6 +1075,7 @@ async function getSystemDataCounts(client = prisma) {
   return {
     usuarios,
     clientes,
+    solicitudesClientes,
     cuentas,
     ventas,
     pagos,
@@ -1040,6 +1106,7 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
     usuarios,
     sesiones,
     clientes,
+    solicitudesClientes,
     cuentas,
     ventas,
     pagos,
@@ -1051,6 +1118,7 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
     prisma.usuarioSistema.findMany({ orderBy: { id: 'asc' } }),
     prisma.sesionSistema.findMany({ orderBy: { id: 'asc' } }),
     prisma.cliente.findMany({ orderBy: { id: 'asc' } }),
+    prisma.solicitudCliente.findMany({ orderBy: { id: 'asc' } }),
     prisma.cuentaAcceso.findMany({ orderBy: { id: 'asc' } }),
     prisma.venta.findMany({ orderBy: { id: 'asc' } }),
     prisma.pago.findMany({ orderBy: { id: 'asc' } }),
@@ -1102,6 +1170,27 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
         monto: serializeMoneyValue(item.monto),
         carpeta: item.carpeta,
         observacion: item.observacion || null,
+        createdAt: serializeDateValue(item.createdAt),
+        updatedAt: serializeDateValue(item.updatedAt),
+      })),
+      solicitudesClientes: solicitudesClientes.map((item) => ({
+        id: item.id,
+        nombre: item.nombre,
+        telefono: item.telefono,
+        monto: serializeMoneyValue(item.monto),
+        carpeta: item.carpeta,
+        observacion: item.observacion || null,
+        tipoDispositivo: item.tipoDispositivo,
+        cantidadDispositivos: Number(item.cantidadDispositivos || 1),
+        pagoRegistrado: !!item.pagoRegistrado,
+        fechaInicio: serializeDateValue(item.fechaInicio),
+        fechaCierre: serializeDateValue(item.fechaCierre),
+        estado: item.estado,
+        motivoRechazo: item.motivoRechazo || null,
+        clienteId: item.clienteId ?? null,
+        ventaId: item.ventaId ?? null,
+        revisadoPorId: item.revisadoPorId ?? null,
+        revisadoAt: serializeDateValue(item.revisadoAt),
         createdAt: serializeDateValue(item.createdAt),
         updatedAt: serializeDateValue(item.updatedAt),
       })),
@@ -1311,6 +1400,7 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
     await tx.sesionSistema.deleteMany({});
     await tx.pago.deleteMany({});
     await tx.venta.deleteMany({});
+    await tx.solicitudCliente.deleteMany({});
     await tx.historialBaja.deleteMany({});
     await tx.whatsAppLog.deleteMany({});
     await tx.actividadSistema.deleteMany({});
@@ -1381,6 +1471,32 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
           capacidad: item.capacidad,
           activa: !!item.activa,
           observacion: item.observacion,
+          createdAt: parseDateOrNull(item.createdAt) || undefined,
+          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
+        })),
+      });
+    }
+
+    if (Array.isArray(data.solicitudesClientes) && data.solicitudesClientes.length) {
+      await tx.solicitudCliente.createMany({
+        data: data.solicitudesClientes.map((item) => ({
+          id: item.id,
+          nombre: item.nombre,
+          telefono: item.telefono,
+          monto: item.monto,
+          carpeta: item.carpeta || '',
+          observacion: item.observacion,
+          tipoDispositivo: item.tipoDispositivo,
+          cantidadDispositivos: item.cantidadDispositivos,
+          pagoRegistrado: !!item.pagoRegistrado,
+          fechaInicio: parseDateOrNull(item.fechaInicio),
+          fechaCierre: parseDateOrNull(item.fechaCierre),
+          estado: item.estado,
+          motivoRechazo: item.motivoRechazo,
+          clienteId: item.clienteId ?? null,
+          ventaId: item.ventaId ?? null,
+          revisadoPorId: item.revisadoPorId ?? null,
+          revisadoAt: parseDateOrNull(item.revisadoAt),
           createdAt: parseDateOrNull(item.createdAt) || undefined,
           updatedAt: parseDateOrNull(item.updatedAt) || undefined,
         })),
@@ -1493,6 +1609,7 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
     await resetTableSequence(tx, 'UsuarioSistema');
     await resetTableSequence(tx, 'SesionSistema');
     await resetTableSequence(tx, 'Cliente');
+    await resetTableSequence(tx, 'SolicitudCliente');
     await resetTableSequence(tx, 'CuentaAcceso');
     await resetTableSequence(tx, 'Venta');
     await resetTableSequence(tx, 'Pago');
@@ -4106,6 +4223,258 @@ app.get('/historial-bajas', requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al listar historial de baja.' });
+  }
+});
+
+/* =========================
+   SOLICITUDES DE CLIENTES
+========================= */
+
+app.post('/solicitudes-clientes/public', async (req, res) => {
+  try {
+    if (cleanText(req.body.website)) {
+      return res.status(200).json({ ok: true });
+    }
+
+    if (isClientRequestRateLimited(req)) {
+      return res.status(429).json({
+        error: 'Has enviado varias solicitudes. Espera unos minutos antes de intentar nuevamente.',
+      });
+    }
+
+    const fechaInicio = parseLocalDate(getCurrentDateInputForTimeZone('America/Lima'));
+    const fechaCierre = addMonthsPreserveDay(fechaInicio, 1);
+    const clienteData = buildClienteData(req.body);
+    const ventaData = buildVentaData(
+      {
+        ...req.body,
+        monto: clienteData.monto,
+        fechaInicio: toISODateUi(fechaInicio),
+        fechaCierre: toISODateUi(fechaCierre),
+        estado: parseBoolean(req.body.pagoRegistrado) ? 'PAGADO' : 'PENDIENTE',
+      },
+      { defaultEstado: 'PENDIENTE' }
+    );
+
+    const pendingRequest = await prisma.solicitudCliente.findFirst({
+      where: {
+        telefono: clienteData.telefono,
+        estado: 'PENDIENTE',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (pendingRequest) {
+      return res.status(409).json({
+        error: 'Ya existe una solicitud pendiente con este teléfono. El administrador la revisará pronto.',
+      });
+    }
+
+    const solicitud = await prisma.solicitudCliente.create({
+      data: {
+        nombre: clienteData.nombre,
+        telefono: clienteData.telefono,
+        monto: clienteData.monto,
+        carpeta: clienteData.carpeta,
+        observacion: clienteData.observacion,
+        tipoDispositivo: ventaData.tipoDispositivo,
+        cantidadDispositivos: ventaData.cantidadDispositivos,
+        pagoRegistrado: parseBoolean(req.body.pagoRegistrado),
+        fechaInicio,
+        fechaCierre,
+      },
+    });
+
+    res.status(201).json({
+      ok: true,
+      id: solicitud.id,
+      fechaInicio: toIsoDateTime(solicitud.fechaInicio),
+      message: 'Solicitud enviada correctamente.',
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'No se pudo enviar la solicitud.'),
+    });
+  }
+});
+
+app.get('/solicitudes-clientes', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const requestedState = cleanText(req.query.estado || 'PENDIENTE').toUpperCase();
+    const validStates = ['PENDIENTE', 'APROBADA', 'RECHAZADA'];
+    const estado = validStates.includes(requestedState) ? requestedState : 'PENDIENTE';
+    const solicitudes = await prisma.solicitudCliente.findMany({
+      where: { estado },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 100,
+    });
+
+    res.json(solicitudes.map(toSolicitudClienteDto));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al listar solicitudes de clientes.' });
+  }
+});
+
+app.post('/solicitudes-clientes/:id/aprobar', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID inválido.' });
+
+    const solicitud = await prisma.solicitudCliente.findUnique({ where: { id } });
+    if (!solicitud) return res.status(404).json({ error: 'Solicitud no encontrada.' });
+    if (solicitud.estado !== 'PENDIENTE') {
+      return res.status(400).json({ error: 'Esta solicitud ya fue revisada.' });
+    }
+
+    const clienteData = buildClienteData({
+      nombre: req.body.nombre ?? solicitud.nombre,
+      telefono: req.body.telefono ?? solicitud.telefono,
+      monto: req.body.monto ?? solicitud.monto,
+      carpeta: req.body.carpeta ?? solicitud.carpeta,
+      observacion: req.body.observacion ?? solicitud.observacion,
+    });
+    const estadoVenta = cleanText(req.body.estadoVenta).toUpperCase() === 'PAGADO'
+      ? 'PAGADO'
+      : 'PENDIENTE';
+    const ventaData = buildVentaData(
+      {
+        fechaInicio: req.body.fechaInicio || toISODateUi(solicitud.fechaInicio),
+        fechaCierre: req.body.fechaCierre || toISODateUi(solicitud.fechaCierre),
+        monto: clienteData.monto,
+        descuento: req.body.descuento || 0,
+        estado: estadoVenta,
+        tipoDispositivo: req.body.tipoDispositivo || solicitud.tipoDispositivo,
+        cantidadDispositivos:
+          req.body.cantidadDispositivos || solicitud.cantidadDispositivos,
+        observacion: req.body.observacion ?? solicitud.observacion,
+      },
+      { defaultEstado: estadoVenta }
+    );
+
+    let cuentaAccesoId = null;
+    try {
+      cuentaAccesoId = await resolveAssignedAccount({ assignmentMode: 'auto' });
+    } catch (assignmentError) {
+      if (!cleanText(assignmentError?.message).includes('No hay cuentas activas')) {
+        throw assignmentError;
+      }
+    }
+
+    const existingClient = await findClienteByTelefono(clienteData.telefono);
+    const result = await prisma.$transaction(async (tx) => {
+      const current = await tx.solicitudCliente.findUnique({ where: { id } });
+      if (!current || current.estado !== 'PENDIENTE') {
+        throw new Error('Esta solicitud ya fue revisada.');
+      }
+
+      const cliente = existingClient
+        ? await tx.cliente.update({ where: { id: existingClient.id }, data: clienteData })
+        : await tx.cliente.create({ data: clienteData });
+
+      const duplicateSale = await tx.venta.findUnique({
+        where: getVentaPeriodoWhere(cliente.id, ventaData.fechaInicio, ventaData.fechaCierre),
+      });
+      if (duplicateSale) {
+        throw new Error('Ya existe una venta para este cliente en ese mismo período.');
+      }
+
+      const venta = await tx.venta.create({
+        data: {
+          ...ventaData,
+          clienteId: cliente.id,
+          cuentaAccesoId,
+        },
+        include: SAFE_VENTA_INCLUDE,
+      });
+
+      const reviewedRequest = await tx.solicitudCliente.update({
+        where: { id },
+        data: {
+          nombre: clienteData.nombre,
+          telefono: clienteData.telefono,
+          monto: clienteData.monto,
+          carpeta: clienteData.carpeta,
+          observacion: clienteData.observacion,
+          tipoDispositivo: ventaData.tipoDispositivo,
+          cantidadDispositivos: ventaData.cantidadDispositivos,
+          pagoRegistrado: estadoVenta === 'PAGADO',
+          fechaInicio: ventaData.fechaInicio,
+          fechaCierre: ventaData.fechaCierre,
+          estado: 'APROBADA',
+          clienteId: cliente.id,
+          ventaId: venta.id,
+          revisadoPorId: req.authUser?.id || null,
+          revisadoAt: new Date(),
+        },
+      });
+
+      return { cliente, venta, solicitud: reviewedRequest };
+    });
+
+    await syncPagoRegistroParaVenta({
+      venta: result.venta,
+      usuarioId: req.authUser?.id,
+      observacion: 'Pago registrado al aprobar la solicitud del cliente',
+    });
+    await registrarActividad({
+      usuarioId: req.authUser?.id,
+      accion: 'APROBAR',
+      entidad: 'SOLICITUD_CLIENTE',
+      entidadId: id,
+      descripcion: `Solicitud aprobada: ${result.cliente.nombre}. Venta #${result.venta.id} creada.`,
+    });
+
+    res.json({
+      ok: true,
+      solicitud: toSolicitudClienteDto(result.solicitud),
+      cliente: toClienteDto(result.cliente),
+      venta: toVentaDto(result.venta),
+      cuentaAsignada: cuentaAccesoId != null,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'No se pudo aprobar la solicitud.'),
+    });
+  }
+});
+
+app.post('/solicitudes-clientes/:id/rechazar', requireRole('ADMIN'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID inválido.' });
+
+    const solicitud = await prisma.solicitudCliente.findUnique({ where: { id } });
+    if (!solicitud) return res.status(404).json({ error: 'Solicitud no encontrada.' });
+    if (solicitud.estado !== 'PENDIENTE') {
+      return res.status(400).json({ error: 'Esta solicitud ya fue revisada.' });
+    }
+
+    const updated = await prisma.solicitudCliente.update({
+      where: { id },
+      data: {
+        estado: 'RECHAZADA',
+        motivoRechazo: cleanText(req.body.motivoRechazo) || null,
+        revisadoPorId: req.authUser?.id || null,
+        revisadoAt: new Date(),
+      },
+    });
+    await registrarActividad({
+      usuarioId: req.authUser?.id,
+      accion: 'RECHAZAR',
+      entidad: 'SOLICITUD_CLIENTE',
+      entidadId: id,
+      descripcion: `Solicitud rechazada: ${updated.nombre}.`,
+    });
+
+    res.json({ ok: true, solicitud: toSolicitudClienteDto(updated) });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({
+      error: getFriendlyErrorMessage(error, 'No se pudo rechazar la solicitud.'),
+    });
   }
 });
 

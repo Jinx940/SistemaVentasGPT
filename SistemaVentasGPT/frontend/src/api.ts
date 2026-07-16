@@ -21,6 +21,9 @@ import type {
   SystemBackupCreateResponse,
   SystemBackupListResponse,
   SystemBackupRestoreResponse,
+  SolicitudCliente,
+  SolicitudClientePublicPayload,
+  SolicitudClienteReviewPayload,
   UsuarioPayload,
   UsuarioSistema,
   Venta,
@@ -235,6 +238,45 @@ export function saveVenta(payload: VentaPayload, id?: number | null) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export function submitClientRequest(payload: SolicitudClientePublicPayload) {
+  return apiFetch<{ ok: true; id: number; fechaInicio: string; message: string }>(
+    '/solicitudes-clientes/public',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function getClientRequests(estado = 'PENDIENTE') {
+  return apiFetch<SolicitudCliente[]>(
+    `/solicitudes-clientes${buildQueryString({ estado })}`,
+  )
+}
+
+export function approveClientRequest(id: number, payload: SolicitudClienteReviewPayload) {
+  return apiFetch<{ ok: true; solicitud: SolicitudCliente; cliente: Cliente; venta: Venta }>(
+    `/solicitudes-clientes/${id}/aprobar`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function rejectClientRequest(id: number, motivoRechazo = '') {
+  return apiFetch<{ ok: true; solicitud: SolicitudCliente }>(
+    `/solicitudes-clientes/${id}/rechazar`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivoRechazo }),
+    },
+  )
 }
 
 export function pagarVenta(id: number, payload: PagarVentaPayload) {

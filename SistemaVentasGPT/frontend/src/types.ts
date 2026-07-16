@@ -47,6 +47,54 @@ export type Venta = {
   cuentaAcceso?: CuentaAcceso | null
 }
 
+export type SolicitudCliente = {
+  id: number
+  nombre: string
+  telefono: string
+  monto: number
+  carpeta: string
+  observacion?: string | null
+  tipoDispositivo: string
+  cantidadDispositivos: number
+  pagoRegistrado: boolean
+  fechaInicio: string
+  fechaCierre: string
+  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA'
+  motivoRechazo?: string | null
+  clienteId?: number | null
+  ventaId?: number | null
+  revisadoPorId?: number | null
+  revisadoAt?: string | null
+  createdAt: string
+  updatedAt?: string | null
+}
+
+export type SolicitudClientePublicPayload = {
+  nombre: string
+  telefono: string
+  monto: number
+  carpeta: string
+  observacion: string
+  tipoDispositivo: string[]
+  cantidadDispositivos: number
+  pagoRegistrado: boolean
+  website?: string
+}
+
+export type SolicitudClienteReviewPayload = {
+  nombre: string
+  telefono: string
+  monto: number
+  carpeta: string
+  observacion: string
+  tipoDispositivo: string
+  cantidadDispositivos: number
+  fechaInicio: string
+  fechaCierre: string
+  estadoVenta: 'PAGADO' | 'PENDIENTE'
+  motivoRechazo?: string
+}
+
 export type HistorialBaja = {
   id: number
   ventaId?: number | null
