@@ -24,8 +24,10 @@
   background: linear-gradient(155deg, rgba(10, 18, 42, 0.96), rgba(5, 11, 28, 0.96));
   box-shadow: 0 32px 90px rgba(2, 6, 23, 0.62), 0 0 0 1px rgba(59, 130, 246, 0.04) inset;
   backdrop-filter: blur(24px);
-  overflow: hidden;
 }
+
+.client-intake-shell { overflow: visible; }
+.client-intake-success { overflow: hidden; }
 
 .client-intake-header {
   padding: 30px 32px 24px;
@@ -34,6 +36,7 @@
   align-items: flex-start;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: linear-gradient(115deg, rgba(37, 99, 235, 0.08), transparent 55%);
+  border-radius: 27px 27px 0 0;
 }
 
 .client-intake-brand,
@@ -589,6 +592,7 @@
 @media (max-width: 520px) {
   .client-intake-page { padding: 0; place-items: stretch; }
   .client-intake-shell { min-height: 100vh; border: 0; border-radius: 0; }
+  .client-intake-header { border-radius: 0; }
 }
 
 @media (max-width: 360px) {
@@ -616,4 +620,5 @@
   .client-intake-submit,
   .client-intake-back { transition: none; }
 }
+
 
