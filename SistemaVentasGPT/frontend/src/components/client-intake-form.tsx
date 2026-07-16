@@ -1,18 +1,25 @@
 import { useState } from 'react'
+import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
 import { getErrorMessage, submitClientRequest } from '../api'
 import { AppIcon } from './icons'
 import './client-intake.css'
 
-const phoneCountries = [
-  { label: 'Perú', code: '51' },
-  { label: 'México', code: '52' },
-  { label: 'Colombia', code: '57' },
-  { label: 'Chile', code: '56' },
-  { label: 'Argentina', code: '54' },
-  { label: 'Ecuador', code: '593' },
-  { label: 'España', code: '34' },
-  { label: 'EE. UU.', code: '1' },
-]
+const countryNames = new Intl.DisplayNames(['es'], { type: 'region' })
+
+function countryFlag(country: CountryCode) {
+  return [...country]
+    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
+    .join('')
+}
+
+const phoneCountries = getCountries()
+  .map((country) => ({
+    country,
+    label: countryNames.of(country) ?? country,
+    callingCode: getCountryCallingCode(country),
+    flag: countryFlag(country),
+  }))
+  .sort((first, second) => first.label.localeCompare(second.label, 'es'))
 
 const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
 const formSteps = [
@@ -25,7 +32,7 @@ type ClientFormStep = 1 | 2 | 3
 
 type ClientFormState = {
   nombre: string
-  countryCode: string
+  country: CountryCode
   telefono: string
   monto: string
   carpeta: string
@@ -38,7 +45,7 @@ type ClientFormState = {
 
 const emptyForm: ClientFormState = {
   nombre: '',
-  countryCode: '51',
+  country: 'PE',
   telefono: '',
   monto: '',
   carpeta: '',
@@ -79,7 +86,7 @@ export function ClientIntakeForm() {
   function getStepError(step: ClientFormStep) {
     if (step === 1) {
       if (!form.nombre.trim()) return 'Escribe tu nombre completo.'
-      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de WhatsApp válido.'
+      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de teléfono válido.'
     }
 
     if (step === 2) {
@@ -130,7 +137,7 @@ export function ClientIntakeForm() {
       setSubmitting(true)
       const response = await submitClientRequest({
         nombre: form.nombre.trim(),
-        telefono: `${form.countryCode}${phoneDigits}`,
+        telefono: `${getCountryCallingCode(form.country)}${phoneDigits}`,
         monto: Number(form.monto),
         carpeta: form.carpeta.trim(),
         observacion: form.observacion.trim(),
@@ -223,13 +230,17 @@ export function ClientIntakeForm() {
 
           <label className="client-intake-field">
             <span>País *</span>
-            <select value={form.countryCode} onChange={(event) => setForm({ ...form, countryCode: event.target.value })}>
-              {phoneCountries.map((country) => <option value={country.code} key={country.code}>{country.label} (+{country.code})</option>)}
+            <select value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value as CountryCode })}>
+              {phoneCountries.map((country) => (
+                <option value={country.country} key={country.country}>
+                  {country.flag} {country.label} (+{country.callingCode})
+                </option>
+              ))}
             </select>
           </label>
 
           <label className="client-intake-field">
-            <span>WhatsApp *</span>
+            <span>Teléfono *</span>
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
           </label>
             </div>
@@ -333,4 +344,5 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
