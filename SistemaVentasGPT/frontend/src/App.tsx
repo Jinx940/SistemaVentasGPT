@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  API_BASE,
   bootstrapAuth,
   changePassword,
   createSystemBackup,
@@ -386,7 +387,7 @@ const defaultWhatsAppConfig: WhatsAppConfig = {
   enabled: false,
   graphVersion: 'v25.0',
   phoneNumberId: '977660538773451',
-  webhookUrl: `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')}/webhooks/whatsapp`,
+  webhookUrl: `${API_BASE}/webhooks/whatsapp`,
   webhookVerifyToken: 'sistema-cobro-whatsapp',
   notifyPhone: '989267132',
   replyAlertTemplateName: 'gpt_alerta_respuesta',
@@ -3577,7 +3578,7 @@ function App() {
     () => whatsAppChats.find((chat) => chat.telefono === selectedWhatsAppChatPhone) || null,
     [whatsAppChats, selectedWhatsAppChatPhone]
   )
-  const defaultWhatsAppWebhookUrl = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '')}/webhooks/whatsapp`
+  const defaultWhatsAppWebhookUrl = `${API_BASE}/webhooks/whatsapp`
   const whatsAppWebhookUrl =
     normalizeWebhookUrl(whatsAppConfig.webhookUrl) || defaultWhatsAppWebhookUrl
   const visibleNavItems = useMemo(

@@ -5,7 +5,7 @@ Sistema de cobranza con:
 - frontend en React + Vite
 - backend en Express + Prisma
 - base de datos PostgreSQL en Supabase
-- despliegue de frontend y backend en Vercel
+- despliegue unificado de frontend y API en un solo proyecto de Vercel
 - soporte para pagos, morosos, actividad, usuarios y WhatsApp
 
 ## Estructura
