@@ -14,7 +14,7 @@ const phoneCountries = [
   { label: 'EE. UU.', code: '1' },
 ]
 
-const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet', 'Smart TV']
+const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
 
 type ClientFormState = {
   nombre: string
@@ -24,7 +24,6 @@ type ClientFormState = {
   carpeta: string
   dispositivos: string[]
   otroDispositivo: string
-  cantidadDispositivos: string
   pagoRegistrado: 'SI' | 'NO'
   observacion: string
   website: string
@@ -38,7 +37,6 @@ const emptyForm: ClientFormState = {
   carpeta: '',
   dispositivos: [],
   otroDispositivo: '',
-  cantidadDispositivos: '1',
   pagoRegistrado: 'NO',
   observacion: '',
   website: '',
@@ -60,22 +58,16 @@ export function ClientIntakeForm() {
   const [requestId, setRequestId] = useState<number | null>(null)
   const todayLabel = useMemo(getTodayLabel, [])
   const selectedDeviceCount = form.dispositivos.length + (form.otroDispositivo.trim() ? 1 : 0)
-  const requestedDeviceCount = Math.max(Number(form.cantidadDispositivos) || 0, selectedDeviceCount)
-  const additionalDeviceCount = Math.max(0, requestedDeviceCount - 1)
+  const additionalDeviceCount = Math.max(0, selectedDeviceCount - 1)
 
   function toggleDevice(device: string) {
     setForm((current) => {
       const dispositivos = current.dispositivos.includes(device)
         ? current.dispositivos.filter((item) => item !== device)
         : [...current.dispositivos, device]
-      const minimumCount = dispositivos.length + (current.otroDispositivo.trim() ? 1 : 0)
-
       return {
         ...current,
         dispositivos,
-        cantidadDispositivos: String(
-          Math.max(Number(current.cantidadDispositivos) || 1, minimumCount),
-        ),
       }
     })
   }
@@ -95,13 +87,6 @@ export function ClientIntakeForm() {
     if (Number(form.monto) <= 0) return setError('Escribe el monto acordado.')
     if (!form.carpeta.trim()) return setError('Escribe un nombre para identificar tu proyecto y tus chats.')
     if (!selectedDevices.length) return setError('Selecciona al menos un dispositivo.')
-    if (Number(form.cantidadDispositivos) <= 0) {
-      return setError('La cantidad de dispositivos debe ser mayor a cero.')
-    }
-    if (Number(form.cantidadDispositivos) < selectedDevices.length) {
-      return setError('La cantidad no puede ser menor al número de dispositivos seleccionados.')
-    }
-
     try {
       setSubmitting(true)
       const response = await submitClientRequest({
@@ -111,7 +96,7 @@ export function ClientIntakeForm() {
         carpeta: form.carpeta.trim(),
         observacion: form.observacion.trim(),
         tipoDispositivo: selectedDevices,
-        cantidadDispositivos: Number(form.cantidadDispositivos),
+        cantidadDispositivos: selectedDevices.length,
         pagoRegistrado: form.pagoRegistrado === 'SI',
         website: form.website,
       })
@@ -228,24 +213,14 @@ export function ClientIntakeForm() {
             </div>
             <input
               value={form.otroDispositivo}
-              onChange={(event) => {
-                const otroDispositivo = event.target.value
-                const minimumCount = form.dispositivos.length + (otroDispositivo.trim() ? 1 : 0)
-                setForm({
-                  ...form,
-                  otroDispositivo,
-                  cantidadDispositivos: String(
-                    Math.max(Number(form.cantidadDispositivos) || 1, minimumCount),
-                  ),
-                })
-              }}
+              onChange={(event) => setForm({ ...form, otroDispositivo: event.target.value })}
               placeholder="Otro dispositivo (opcional)"
             />
           </fieldset>
 
           <label className="client-intake-field">
             <span>¿En cuántos dispositivos lo usarás? *</span>
-            <input value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: event.target.value })} type="number" min={Math.max(1, selectedDeviceCount)} max="50" />
+            <input value={selectedDeviceCount} type="number" min="0" readOnly aria-readonly="true" />
           </label>
 
           <label className="client-intake-field">
