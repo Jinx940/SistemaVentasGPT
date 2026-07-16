@@ -61,8 +61,10 @@ export function ClientIntakeForm() {
   ].filter(Boolean)
   const selectedDeviceCount = selectedDevices.length
   const additionalDeviceCount = Math.max(0, selectedDeviceCount - 1)
+  const progressPercent = Math.round((currentStep / formSteps.length) * 100)
 
   function toggleDevice(device: string) {
+    setError('')
     setForm((current) => {
       const dispositivos = current.dispositivos.includes(device)
         ? current.dispositivos.filter((item) => item !== device)
@@ -176,27 +178,36 @@ export function ClientIntakeForm() {
         </header>
 
         <nav className="client-intake-steps" aria-label="Progreso del formulario">
-          {formSteps.map((step) => {
-            const isActive = currentStep === step.number
-            const isComplete = currentStep > step.number
-            return (
-              <button
-                type="button"
-                key={step.number}
-                className={`${isActive ? 'is-active' : ''} ${isComplete ? 'is-complete' : ''}`.trim()}
-                aria-current={isActive ? 'step' : undefined}
-                disabled={step.number > currentStep}
-                onClick={() => showStep(step.number)}
-              >
-                <span>{isComplete ? '✓' : step.number}</span>
-                <strong>{step.label}</strong>
-              </button>
-            )
-          })}
+          <div className="client-intake-progress-summary">
+            <span>Paso {currentStep} de {formSteps.length}</span>
+            <strong>{progressPercent}%</strong>
+          </div>
+          <div className="client-intake-progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100}>
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className="client-intake-step-list">
+            {formSteps.map((step) => {
+              const isActive = currentStep === step.number
+              const isComplete = currentStep > step.number
+              return (
+                <button
+                  type="button"
+                  key={step.number}
+                  className={`${isActive ? 'is-active' : ''} ${isComplete ? 'is-complete' : ''}`.trim()}
+                  aria-current={isActive ? 'step' : undefined}
+                  disabled={step.number > currentStep}
+                  onClick={() => showStep(step.number)}
+                >
+                  <span>{isComplete ? '✓' : step.number}</span>
+                  <strong>{step.label}</strong>
+                </button>
+              )
+            })}
+          </div>
         </nav>
 
-        <form className="client-intake-form" onSubmit={submit}>
-          {error && <div className="client-intake-error" role="alert">{error}</div>}
+        <form className="client-intake-form" onSubmit={submit} onChange={() => { if (error) setError('') }} aria-busy={submitting}>
+          {error && <div className="client-intake-error" role="alert"><span aria-hidden="true">!</span>{error}</div>}
 
           {currentStep === 1 && <section className="client-intake-form-section">
             <div className="client-intake-section-title">
@@ -307,11 +318,14 @@ export function ClientIntakeForm() {
           <div className="client-intake-actions">
             {currentStep > 1 && (
               <button className="client-intake-back" type="button" onClick={() => showStep((currentStep - 1) as ClientFormStep)}>
-                Anterior
+                <span aria-hidden="true">←</span>
+                <span>Anterior</span>
               </button>
             )}
             <button className="client-intake-submit" type="submit" disabled={submitting}>
-              {currentStep < 3 ? 'Siguiente' : submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}
+              {submitting && <span className="client-intake-spinner" aria-hidden="true" />}
+              <span>{currentStep < 3 ? 'Siguiente' : submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}</span>
+              {!submitting && <span aria-hidden="true">→</span>}
             </button>
           </div>
         </form>
