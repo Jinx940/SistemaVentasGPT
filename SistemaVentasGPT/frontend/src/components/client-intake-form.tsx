@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
-import { getErrorMessage, submitClientRequest } from '../api'
+import { getErrorMessage, getPublicAccessAccounts, submitClientRequest } from '../api'
+import type { CuentaAccesoPublica } from '../types'
 import { AppIcon } from './icons'
 import './client-intake.css'
 
@@ -132,6 +133,7 @@ type ClientFormState = {
   telefono: string
   monto: string
   carpeta: string
+  cuentaAccesoId: string
   dispositivos: string[]
   otroDispositivo: string
   pagoRegistrado: 'SI' | 'NO'
@@ -145,6 +147,7 @@ const emptyForm: ClientFormState = {
   telefono: '',
   monto: '',
   carpeta: '',
+  cuentaAccesoId: '',
   dispositivos: [],
   otroDispositivo: '',
   pagoRegistrado: 'NO',
@@ -154,6 +157,9 @@ const emptyForm: ClientFormState = {
 
 export function ClientIntakeForm() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
+  const [accessAccounts, setAccessAccounts] = useState<CuentaAccesoPublica[]>([])
+  const [accountsLoading, setAccountsLoading] = useState(true)
+  const [accountsError, setAccountsError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [requestId, setRequestId] = useState<number | null>(null)
@@ -165,6 +171,26 @@ export function ClientIntakeForm() {
   const selectedDeviceCount = selectedDevices.length
   const additionalDeviceCount = Math.max(0, selectedDeviceCount - 1)
   const progressPercent = Math.round((currentStep / formSteps.length) * 100)
+
+  useEffect(() => {
+    let active = true
+
+    getPublicAccessAccounts()
+      .then((accounts) => {
+        if (!active) return
+        setAccessAccounts(accounts)
+        setAccountsError(accounts.length ? '' : 'No hay correos disponibles en este momento.')
+      })
+      .catch((loadError) => {
+        if (!active) return
+        setAccountsError(getErrorMessage(loadError, 'No se pudieron cargar los correos.'))
+      })
+      .finally(() => {
+        if (active) setAccountsLoading(false)
+      })
+
+    return () => { active = false }
+  }, [])
 
   function toggleDevice(device: string) {
     setError('')
@@ -188,6 +214,9 @@ export function ClientIntakeForm() {
     if (step === 2) {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
+      if (!form.cuentaAccesoId) {
+        return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
+      }
     }
 
     if (step === 3 && !selectedDevices.length) return 'Selecciona al menos un dispositivo.'
@@ -236,6 +265,7 @@ export function ClientIntakeForm() {
         telefono: `${getCountryCallingCode(form.country)}${phoneDigits}`,
         monto: Number(form.monto),
         carpeta: form.carpeta.trim(),
+        cuentaAccesoId: Number(form.cuentaAccesoId),
         observacion: form.observacion.trim(),
         tipoDispositivo: selectedDevices,
         cantidadDispositivos: selectedDevices.length,
@@ -355,6 +385,26 @@ export function ClientIntakeForm() {
             <span>Nombre del proyecto *</span>
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
           </label>
+
+          <label className="client-intake-field client-intake-field--wide">
+            <span>Correo de acceso *</span>
+            <select
+              value={form.cuentaAccesoId}
+              onChange={(event) => setForm({ ...form, cuentaAccesoId: event.target.value })}
+              disabled={accountsLoading || accessAccounts.length === 0}
+            >
+              <option value="">
+                {accountsLoading
+                  ? 'Cargando correos...'
+                  : accessAccounts.length
+                    ? 'Selecciona un correo'
+                    : 'No hay correos disponibles'}
+              </option>
+              {accessAccounts.map((account) => (
+                <option value={account.id} key={account.id}>{account.correo}</option>
+              ))}
+            </select>
+          </label>
             </div>
           </section>}
 
@@ -434,6 +484,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
