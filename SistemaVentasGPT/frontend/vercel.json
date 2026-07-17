@@ -9,6 +9,10 @@
       "destination": "/api"
     },
     {
+      "source": "/formulario-cliente",
+      "destination": "/formulario-cliente.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
