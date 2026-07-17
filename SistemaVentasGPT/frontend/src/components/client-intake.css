@@ -76,6 +76,8 @@
   display: flex;
   gap: 18px;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: linear-gradient(115deg, rgba(37, 99, 235, 0.08), transparent 55%);
   border-radius: 27px 27px 0 0;
@@ -707,6 +709,7 @@
   .client-intake-submit,
   .client-intake-back { transition: none; }
 }
+
 
 
 
