@@ -26,6 +26,11 @@ export type CuentaAcceso = {
   updatedAt?: string | null
 }
 
+export type CuentaAccesoPublica = {
+  id: number
+  correo: string
+}
+
 export type Venta = {
   id: number
   no?: number
@@ -63,6 +68,7 @@ export type SolicitudCliente = {
   motivoRechazo?: string | null
   clienteId?: number | null
   ventaId?: number | null
+  cuentaAccesoId?: number | null
   revisadoPorId?: number | null
   revisadoAt?: string | null
   createdAt: string
@@ -78,6 +84,7 @@ export type SolicitudClientePublicPayload = {
   tipoDispositivo: string[]
   cantidadDispositivos: number
   pagoRegistrado: boolean
+  cuentaAccesoId: number
   website?: string
 }
 
@@ -92,6 +99,7 @@ export type SolicitudClienteReviewPayload = {
   fechaInicio: string
   fechaCierre: string
   estadoVenta: 'PAGADO' | 'PENDIENTE'
+  cuentaAccesoId: number | null
   motivoRechazo?: string
 }
 
@@ -499,3 +507,4 @@ export type WhatsAppChatReplyResponse = {
   to: string
   messageId?: string | null
 }
+
