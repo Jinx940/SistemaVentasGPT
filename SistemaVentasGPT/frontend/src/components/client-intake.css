@@ -618,6 +618,64 @@
 .client-intake-date-picker__footer button:hover:not(:disabled) { background: rgba(37, 99, 235, 0.34); }
 .client-intake-date-picker__footer button:disabled { opacity: 0.35; cursor: not-allowed; }
 
+.client-intake-auto-date {
+  min-height: 50px;
+  padding: 7px 12px 7px 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  border-radius: 13px;
+  color: #8290a7;
+  background: linear-gradient(145deg, rgba(17, 27, 49, 0.76), rgba(9, 17, 35, 0.82));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
+  transition: border-color 0.28s ease, background 0.28s ease, box-shadow 0.28s ease;
+}
+
+.client-intake-auto-date.has-value {
+  border-color: rgba(56, 189, 248, 0.34);
+  color: #e0f2fe;
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.13), rgba(30, 58, 138, 0.18));
+  box-shadow: 0 10px 26px rgba(14, 165, 233, 0.08), 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+}
+
+.client-intake-auto-date__icon {
+  width: 35px;
+  height: 35px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 10px;
+  color: #7f91ad;
+  background: rgba(30, 58, 138, 0.14);
+}
+
+.client-intake-auto-date.has-value .client-intake-auto-date__icon {
+  border-color: rgba(56, 189, 248, 0.26);
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.14);
+}
+
+.client-intake-auto-date__icon svg { width: 18px; height: 18px; }
+.client-intake-auto-date > span:last-child { min-width: 0; }
+.client-intake-auto-date strong,
+.client-intake-auto-date small { display: block; }
+
+.client-intake-auto-date strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-intake-auto-date small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .client-intake-country-select {
   position: relative;
   min-width: 0;
@@ -1215,6 +1273,8 @@
   .client-intake-premium-select__trigger { min-height: 48px; font-size: 16px; }
   .client-intake-premium-select__menu button { min-height: 50px; font-size: 15px; }
   .client-intake-date-picker__trigger { min-height: 52px; font-size: 15px; }
+  .client-intake-auto-date { min-height: 52px; }
+  .client-intake-auto-date strong { font-size: 14px; }
   .client-intake-date-picker__backdrop {
     background: rgba(2, 6, 23, 0.68);
     backdrop-filter: blur(5px);
@@ -1306,6 +1366,7 @@
   .client-intake-date-picker__chevron,
   .client-intake-date-picker__header button,
   .client-intake-date-picker__days button,
+  .client-intake-auto-date,
   .client-intake-submit,
   .client-intake-back { transition: none; }
 }

@@ -219,6 +219,15 @@ function formatCalendarDate(value: string) {
     : ''
 }
 
+function addOneMonthToInput(value: string) {
+  const date = dateFromInput(value)
+  if (!date) return ''
+  const targetMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1, 12)
+  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0, 12).getDate()
+  targetMonth.setDate(Math.min(date.getDate(), lastDay))
+  return dateToInput(targetMonth)
+}
+
 type PremiumDatePickerProps = {
   value: string
   placeholder: string
@@ -446,10 +455,7 @@ export function ClientIntakeForm() {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
       if (!form.fechaInicio) return 'Selecciona la fecha en que inició el servicio.'
-      if (!form.fechaCierre) return 'Selecciona la próxima fecha de pago.'
-      if (form.fechaCierre < form.fechaInicio) {
-        return 'La próxima fecha de pago no puede ser anterior al inicio del servicio.'
-      }
+      if (!form.fechaCierre) return 'No se pudo calcular la fecha de vencimiento.'
       if (!form.cuentaAccesoId) {
         return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
       }
@@ -525,10 +531,9 @@ export function ClientIntakeForm() {
           <div className="client-intake-success__icon">
             <img src={gptLogo} alt="Logo de Sistema de Cobro" />
           </div>
-          <p className="client-intake-eyebrow">DATOS GUARDADOS</p>
           <h1>¡Gracias! Tu servicio quedó registrado.</h1>
           <p className="client-intake-success__intro">
-            Guardamos tus datos correctamente. Tu servicio tiene una duración mensual desde la fecha de inicio indicada.
+            Guardamos tus datos correctamente. El servicio dura un mes desde la fecha de inicio indicada.
           </p>
 
           <div className="client-intake-success__summary">
@@ -541,7 +546,7 @@ export function ClientIntakeForm() {
               <strong>1 mes de servicio</strong>
             </div>
             <div>
-              <span>Próximo pago</span>
+              <span>Vencimiento y próximo pago</span>
               <strong>{formatCalendarDate(form.fechaCierre)}</strong>
             </div>
           </div>
@@ -662,22 +667,27 @@ export function ClientIntakeForm() {
               onChange={(fechaInicio) => setForm((current) => ({
                 ...current,
                 fechaInicio,
-                fechaCierre: current.fechaCierre && current.fechaCierre < fechaInicio ? '' : current.fechaCierre,
+                fechaCierre: addOneMonthToInput(fechaInicio),
               }))}
             />
           </label>
 
-          <label className="client-intake-field">
-            <span>Próxima fecha de pago *</span>
-            <PremiumDatePicker
-              value={form.fechaCierre}
-              min={form.fechaInicio || undefined}
-              placeholder="Selecciona la fecha de pago"
-              ariaLabel="Próxima fecha de pago"
-              align="end"
-              onChange={(fechaCierre) => setForm({ ...form, fechaCierre })}
-            />
-          </label>
+          <div className="client-intake-field">
+            <span>Vencimiento del servicio</span>
+            <div className={`client-intake-auto-date ${form.fechaCierre ? 'has-value' : ''}`} aria-live="polite">
+              <span className="client-intake-auto-date__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 8v5l3 2" />
+                  <circle cx="12" cy="12" r="8" />
+                  <path d="M7 2 4 5M17 2l3 3" />
+                </svg>
+              </span>
+              <span>
+                <strong>{form.fechaCierre ? formatCalendarDate(form.fechaCierre) : 'Se calculará automáticamente'}</strong>
+                <small>Un mes después de la fecha de inicio</small>
+              </span>
+            </div>
+          </div>
 
           <div className="client-intake-field client-intake-field--wide">
             <span>Correo de acceso *</span>
