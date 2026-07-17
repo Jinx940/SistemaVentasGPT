@@ -46,6 +46,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false)
 
   const selectedRequest = useMemo(
     () => requests.find((request) => request.id === selectedId) || null,
@@ -85,6 +86,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
     setForm(selectedRequest ? requestToForm(selectedRequest) : null)
     setMessage('')
     setError('')
+    setRejectConfirmOpen(false)
   }, [selectedRequest])
 
   useEffect(() => {
@@ -100,7 +102,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
       setLinkCopied(true)
       window.setTimeout(() => setLinkCopied(false), 1800)
     } catch {
-      window.prompt('Copia el enlace del formulario:', formUrl)
+      setError('No se pudo copiar el enlace. Puedes seleccionarlo directamente en la parte superior.')
     }
   }
 
@@ -134,12 +136,12 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
 
   async function reject() {
     if (!selectedRequest || !form) return
-    if (!window.confirm(`¿Rechazar la solicitud de ${selectedRequest.nombre}?`)) return
 
     try {
       setSaving(true)
       setError('')
       await rejectClientRequest(selectedRequest.id, form.motivoRechazo)
+      setRejectConfirmOpen(false)
       setMessage(`Solicitud #${selectedRequest.id} rechazada.`)
       await loadRequests(true)
     } catch (rejectError) {
@@ -178,7 +180,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
                 <p>FORMULARIO CLIENTE</p>
                 <h2>Solicitudes pendientes <span>{requests.length}</span></h2>
               </div>
-              <button type="button" className="client-request-close" onClick={() => setOpen(false)} aria-label="Cerrar">×</button>
+              <button type="button" className="client-request-close" onClick={() => { setRejectConfirmOpen(false); setOpen(false) }} aria-label="Cerrar">×</button>
             </header>
 
             <div className="client-request-share">
@@ -255,7 +257,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
                     <label className="is-wide"><span>Motivo de rechazo (opcional)</span><input value={form.motivoRechazo} onChange={(event) => setForm({ ...form, motivoRechazo: event.target.value })} placeholder="Solo se guardará si rechazas" /></label>
 
                     <footer className="client-request-actions">
-                      <button type="button" className="is-reject" onClick={() => void reject()} disabled={saving}>Rechazar</button>
+                      <button type="button" className="is-reject" onClick={() => setRejectConfirmOpen(true)} disabled={saving}>Rechazar</button>
                       <button type="submit" className="is-approve" disabled={saving}>{saving ? 'Guardando...' : 'Aprobar y crear venta'}</button>
                     </footer>
                   </form>
@@ -263,9 +265,33 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
               </div>
             )}
           </section>
+
+          {rejectConfirmOpen && selectedRequest && (
+            <div
+              className="client-request-confirm-overlay"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !saving) setRejectConfirmOpen(false)
+              }}
+            >
+              <section className="client-request-confirm" role="alertdialog" aria-modal="true" aria-labelledby="reject-request-title" aria-describedby="reject-request-description">
+                <div className="client-request-confirm__icon" aria-hidden="true">!</div>
+                <p>CONFIRMAR RECHAZO</p>
+                <h3 id="reject-request-title">¿Rechazar esta solicitud?</h3>
+                <div id="reject-request-description">
+                  La solicitud de <strong>{selectedRequest.nombre}</strong> quedará marcada como rechazada.
+                  {form?.motivoRechazo?.trim() && <small>Motivo: {form.motivoRechazo.trim()}</small>}
+                </div>
+                <footer>
+                  <button type="button" className="is-cancel" onClick={() => setRejectConfirmOpen(false)} disabled={saving} autoFocus>Cancelar</button>
+                  <button type="button" className="is-confirm" onClick={() => void reject()} disabled={saving}>{saving ? 'Rechazando...' : 'Sí, rechazar'}</button>
+                </footer>
+              </section>
+            </div>
+          )}
         </div>
       )}
     </>
   )
 }
+
 
