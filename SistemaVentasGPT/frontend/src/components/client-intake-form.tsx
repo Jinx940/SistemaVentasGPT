@@ -523,12 +523,34 @@ export function ClientIntakeForm() {
       <main className="client-intake-page">
         <section className="client-intake-success" aria-live="polite">
           <div className="client-intake-success__icon"><AppIcon name="shield" size={34} /></div>
-          <p className="client-intake-eyebrow">SOLICITUD RECIBIDA</p>
-          <h1>¡Gracias! Recibimos tu solicitud.</h1>
-          <p>
-            Tus datos fueron enviados correctamente. Revisaremos tu solicitud y nos comunicaremos
-            contigo para confirmar el servicio. No necesitas hacer nada más; ya puedes cerrar esta página.
+          <p className="client-intake-eyebrow">DATOS GUARDADOS</p>
+          <h1>¡Gracias! Tu servicio quedó registrado.</h1>
+          <p className="client-intake-success__intro">
+            Guardamos tus datos correctamente. Tu servicio tiene una duración mensual desde la fecha de inicio indicada.
           </p>
+
+          <div className="client-intake-success__summary">
+            <div>
+              <span>Inicio del servicio</span>
+              <strong>{formatCalendarDate(form.fechaInicio)}</strong>
+            </div>
+            <div>
+              <span>Duración</span>
+              <strong>1 mes de servicio</strong>
+            </div>
+            <div>
+              <span>Próximo pago</span>
+              <strong>{formatCalendarDate(form.fechaCierre)}</strong>
+            </div>
+          </div>
+
+          <div className="client-intake-success__closing">
+            <AppIcon name="shield" size={18} />
+            <span>
+              El administrador revisará la información y te contactará únicamente si necesita confirmar algún dato.
+              Gracias por confiar en nosotros.
+            </span>
+          </div>
         </section>
       </main>
     )
