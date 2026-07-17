@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
 import { getErrorMessage, getPublicAccessAccounts, submitClientRequest } from '../api'
+import gptLogo from '../assets/GPT.png'
 import type { CuentaAccesoPublica } from '../types'
 import { AppIcon } from './icons'
 import './client-intake.css'
@@ -69,7 +70,7 @@ function CountrySelect({ value, onChange }: CountrySelectProps) {
         <img src={countryFlagUrl(selectedCountry.country)} width="24" height="18" alt="" aria-hidden="true" />
         <span className="client-intake-country-name">{selectedCountry.label}</span>
         <span className="client-intake-country-code">+{selectedCountry.callingCode}</span>
-        <span className="client-intake-country-chevron" aria-hidden="true">⌄</span>
+        <span className="client-intake-country-chevron" aria-hidden="true">âŒ„</span>
       </button>
 
       {isOpen && (
@@ -84,11 +85,11 @@ function CountrySelect({ value, onChange }: CountrySelectProps) {
                 setQuery('')
               }
             }}
-            placeholder="Buscar país o prefijo"
-            aria-label="Buscar país"
+            placeholder="Buscar paÃ­s o prefijo"
+            aria-label="Buscar paÃ­s"
             autoFocus
           />
-          <div className="client-intake-country-options" role="listbox" aria-label="Países">
+          <div className="client-intake-country-options" role="listbox" aria-label="PaÃ­ses">
             {filteredCountries.map((country) => (
               <button
                 type="button"
@@ -110,7 +111,7 @@ function CountrySelect({ value, onChange }: CountrySelectProps) {
                 <small>+{country.callingCode}</small>
               </button>
             ))}
-            {!filteredCountries.length && <p>No encontramos ese país.</p>}
+            {!filteredCountries.length && <p>No encontramos ese paÃ­s.</p>}
           </div>
         </div>
       )}
@@ -208,14 +209,14 @@ export function ClientIntakeForm() {
   function getStepError(step: ClientFormStep) {
     if (step === 1) {
       if (!form.nombre.trim()) return 'Escribe tu nombre completo.'
-      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de teléfono válido.'
+      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un nÃºmero de telÃ©fono vÃ¡lido.'
     }
 
     if (step === 2) {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
       if (!form.cuentaAccesoId) {
-        return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
+        return accountsError || 'Selecciona el correo que usarÃ¡s para acceder al servicio.'
       }
     }
 
@@ -286,10 +287,10 @@ export function ClientIntakeForm() {
         <section className="client-intake-success" aria-live="polite">
           <div className="client-intake-success__icon"><AppIcon name="shield" size={34} /></div>
           <p className="client-intake-eyebrow">SOLICITUD RECIBIDA</p>
-          <h1>¡Gracias! Recibimos tu solicitud.</h1>
+          <h1>Â¡Gracias! Recibimos tu solicitud.</h1>
           <p>
             Tus datos fueron enviados correctamente. Revisaremos tu solicitud y nos comunicaremos
-            contigo para confirmar el servicio. No necesitas hacer nada más; ya puedes cerrar esta página.
+            contigo para confirmar el servicio. No necesitas hacer nada mÃ¡s; ya puedes cerrar esta pÃ¡gina.
           </p>
         </section>
       </main>
@@ -300,7 +301,9 @@ export function ClientIntakeForm() {
     <main className="client-intake-page">
       <section className="client-intake-shell">
         <header className="client-intake-header">
-          <div className="client-intake-brand"><AppIcon name="clientes" size={26} /></div>
+          <div className="client-intake-brand">
+            <img src={gptLogo} alt="Logo de Sistema de Cobro" />
+          </div>
           <div>
             <p className="client-intake-eyebrow">SISTEMA DE COBRO</p>
             <h1>Solicita tu servicio</h1>
@@ -328,7 +331,7 @@ export function ClientIntakeForm() {
                   disabled={step.number > currentStep}
                   onClick={() => showStep(step.number)}
                 >
-                  <span>{isComplete ? '✓' : step.number}</span>
+                  <span>{isComplete ? 'âœ“' : step.number}</span>
                   <strong>{step.label}</strong>
                 </button>
               )
@@ -352,12 +355,12 @@ export function ClientIntakeForm() {
           </label>
 
           <div className="client-intake-field client-intake-country-field">
-            <span>País *</span>
+            <span>PaÃ­s *</span>
             <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} />
           </div>
 
           <label className="client-intake-field client-intake-phone-field">
-            <span>Teléfono *</span>
+            <span>TelÃ©fono *</span>
             <input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} placeholder="999 999 999" inputMode="tel" autoComplete="tel" />
           </label>
             </div>
@@ -366,7 +369,7 @@ export function ClientIntakeForm() {
           {currentStep === 2 && <section className="client-intake-form-section">
             <div className="client-intake-section-title">
               <span>2</span>
-              <div><strong>Información del servicio</strong></div>
+              <div><strong>InformaciÃ³n del servicio</strong></div>
             </div>
             <div className="client-intake-section-grid">
 
@@ -413,7 +416,7 @@ export function ClientIntakeForm() {
             <div className="client-intake-section-grid">
 
           <fieldset className="client-intake-field client-intake-field--wide client-intake-devices">
-            <legend>¿En qué dispositivo usarás el servicio? *</legend>
+            <legend>Â¿En quÃ© dispositivo usarÃ¡s el servicio? *</legend>
             <div className="client-intake-chip-list">
               {deviceOptions.map((device) => (
                 <button type="button" key={device} aria-pressed={form.dispositivos.includes(device)} className={form.dispositivos.includes(device) ? 'is-selected' : ''} onClick={() => toggleDevice(device)}>
@@ -429,15 +432,15 @@ export function ClientIntakeForm() {
           </fieldset>
 
           <label className="client-intake-field">
-            <span>¿En cuántos dispositivos lo usarás? *</span>
+            <span>Â¿En cuÃ¡ntos dispositivos lo usarÃ¡s? *</span>
             <input value={selectedDeviceCount} type="number" min="0" readOnly aria-readonly="true" />
           </label>
 
           <label className="client-intake-field">
-            <span>¿Ya realizaste el pago mensual? *</span>
+            <span>Â¿Ya realizaste el pago mensual? *</span>
             <select value={form.pagoRegistrado} onChange={(event) => setForm({ ...form, pagoRegistrado: event.target.value as 'SI' | 'NO' })}>
-              <option value="NO">Aún no he pagado</option>
-              <option value="SI">Sí, ya realicé el pago</option>
+              <option value="NO">AÃºn no he pagado</option>
+              <option value="SI">SÃ­, ya realicÃ© el pago</option>
             </select>
           </label>
 
@@ -446,14 +449,14 @@ export function ClientIntakeForm() {
               <span className="client-intake-currency-badge" aria-hidden="true">S/</span>
               <span>
                 <strong>Costo por dispositivo adicional</strong>
-                Desde 2 dispositivos se aplica un costo adicional. Coordínalo con el dueño.
+                Desde 2 dispositivos se aplica un costo adicional. CoordÃ­nalo con el dueÃ±o.
               </span>
             </div>
           )}
 
           <label className="client-intake-field client-intake-field--wide">
-            <span>Observación</span>
-            <textarea value={form.observacion} onChange={(event) => setForm({ ...form, observacion: event.target.value })} rows={4} placeholder="Algún dato adicional que debamos saber" />
+            <span>ObservaciÃ³n</span>
+            <textarea value={form.observacion} onChange={(event) => setForm({ ...form, observacion: event.target.value })} rows={4} placeholder="AlgÃºn dato adicional que debamos saber" />
           </label>
             </div>
           </section>}
@@ -466,14 +469,14 @@ export function ClientIntakeForm() {
           <div className="client-intake-actions">
             {currentStep > 1 && (
               <button className="client-intake-back" type="button" onClick={() => showStep((currentStep - 1) as ClientFormStep)}>
-                <span aria-hidden="true">←</span>
+                <span aria-hidden="true">â†</span>
                 <span>Anterior</span>
               </button>
             )}
             <button className="client-intake-submit" type="submit" disabled={submitting}>
               {submitting && <span className="client-intake-spinner" aria-hidden="true" />}
               <span>{currentStep < 3 ? 'Siguiente' : submitting ? 'Enviando solicitud...' : 'Enviar mi solicitud'}</span>
-              {!submitting && <span aria-hidden="true">→</span>}
+              {!submitting && <span aria-hidden="true">â†’</span>}
             </button>
           </div>
         </form>
@@ -481,6 +484,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
