@@ -612,6 +612,7 @@ function toSolicitudClienteDto(solicitud) {
     motivoRechazo: solicitud.motivoRechazo || null,
     clienteId: solicitud.clienteId ?? null,
     ventaId: solicitud.ventaId ?? null,
+    cuentaAccesoId: solicitud.cuentaAccesoId ?? null,
     revisadoPorId: solicitud.revisadoPorId ?? null,
     revisadoAt: toIsoDateTime(solicitud.revisadoAt),
     createdAt: toIsoDateTime(solicitud.createdAt),
@@ -1189,6 +1190,7 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
         motivoRechazo: item.motivoRechazo || null,
         clienteId: item.clienteId ?? null,
         ventaId: item.ventaId ?? null,
+        cuentaAccesoId: item.cuentaAccesoId ?? null,
         revisadoPorId: item.revisadoPorId ?? null,
         revisadoAt: serializeDateValue(item.revisadoAt),
         createdAt: serializeDateValue(item.createdAt),
@@ -1495,6 +1497,7 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
           motivoRechazo: item.motivoRechazo,
           clienteId: item.clienteId ?? null,
           ventaId: item.ventaId ?? null,
+          cuentaAccesoId: item.cuentaAccesoId ?? null,
           revisadoPorId: item.revisadoPorId ?? null,
           revisadoAt: parseDateOrNull(item.revisadoAt),
           createdAt: parseDateOrNull(item.createdAt) || undefined,
@@ -4230,6 +4233,20 @@ app.get('/historial-bajas', requireAuth, async (req, res) => {
    SOLICITUDES DE CLIENTES
 ========================= */
 
+app.get('/solicitudes-clientes/public/cuentas', async (_req, res) => {
+  try {
+    const cuentas = await listAccountsWithUsage();
+    const disponibles = cuentas
+      .filter((cuenta) => cuenta.activa && cuenta.free > 0)
+      .map((cuenta) => ({ id: cuenta.id, correo: cuenta.correo }));
+
+    res.json(disponibles);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudieron cargar los correos disponibles.' });
+  }
+});
+
 app.post('/solicitudes-clientes/public', async (req, res) => {
   try {
     if (cleanText(req.body.website)) {
@@ -4244,6 +4261,10 @@ app.post('/solicitudes-clientes/public', async (req, res) => {
 
     const fechaInicio = parseLocalDate(getCurrentDateInputForTimeZone('America/Lima'));
     const fechaCierre = addMonthsPreserveDay(fechaInicio, 1);
+    const cuentaAccesoId = await resolveAssignedAccount({
+      assignmentMode: 'manual',
+      cuentaAccesoId: req.body.cuentaAccesoId,
+    });
     const clienteData = buildClienteData(req.body);
     if (!clienteData.carpeta) {
       throw new Error('El nombre del proyecto es obligatorio para identificar los chats.');
@@ -4283,6 +4304,7 @@ app.post('/solicitudes-clientes/public', async (req, res) => {
         tipoDispositivo: ventaData.tipoDispositivo,
         cantidadDispositivos: ventaData.cantidadDispositivos,
         pagoRegistrado: parseBoolean(req.body.pagoRegistrado),
+        cuentaAccesoId,
         fechaInicio,
         fechaCierre,
       },
@@ -4359,9 +4381,15 @@ app.post('/solicitudes-clientes/:id/aprobar', requireRole('ADMIN'), async (req, 
       { defaultEstado: estadoVenta }
     );
 
+    const requestedAccountId = Number(
+      req.body.cuentaAccesoId ?? solicitud.cuentaAccesoId ?? 0
+    );
     let cuentaAccesoId = null;
     try {
-      cuentaAccesoId = await resolveAssignedAccount({ assignmentMode: 'auto' });
+      cuentaAccesoId = await resolveAssignedAccount({
+        assignmentMode: requestedAccountId ? 'manual' : 'auto',
+        cuentaAccesoId: requestedAccountId || null,
+      });
     } catch (assignmentError) {
       if (!cleanText(assignmentError?.message).includes('No hay cuentas activas')) {
         throw assignmentError;
@@ -4411,6 +4439,7 @@ app.post('/solicitudes-clientes/:id/aprobar', requireRole('ADMIN'), async (req, 
           estado: 'APROBADA',
           clienteId: cliente.id,
           ventaId: venta.id,
+          cuentaAccesoId,
           revisadoPorId: req.authUser?.id || null,
           revisadoAt: new Date(),
         },
@@ -5989,3 +6018,4 @@ if (process.env.VERCEL !== '1') {
 }
 
 module.exports = app;
+
