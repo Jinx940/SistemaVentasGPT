@@ -52,7 +52,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
     () => requests.find((request) => request.id === selectedId) || null,
     [requests, selectedId],
   )
-  const formUrl = `${window.location.origin}/formulario-cliente`
+  const formUrl = `${window.location.origin}/formulario-cliente?v=1`
 
   const loadRequests = useCallback(async (quiet = false) => {
     try {
