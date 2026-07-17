@@ -80,6 +80,8 @@ export type SolicitudClientePublicPayload = {
   telefono: string
   monto: number
   carpeta: string
+  fechaInicio: string
+  fechaCierre: string
   observacion: string
   tipoDispositivo: string[]
   cantidadDispositivos: number

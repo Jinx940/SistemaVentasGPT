@@ -230,7 +230,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
                     <label><span>WhatsApp</span><input value={form.telefono} onChange={(event) => setForm({ ...form, telefono: event.target.value })} /></label>
                     <label><span>Monto (S/)</span><input type="number" min="0.01" step="0.01" value={form.monto} onChange={(event) => setForm({ ...form, monto: Number(event.target.value) })} /></label>
                     <label><span>Fecha de inicio</span><input type="date" value={form.fechaInicio} onChange={(event) => setForm({ ...form, fechaInicio: event.target.value })} /></label>
-                    <label><span>Fecha de cierre</span><input type="date" value={form.fechaCierre} onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })} /></label>
+                    <label><span>Próxima fecha de pago</span><input type="date" min={form.fechaInicio || undefined} value={form.fechaCierre} onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })} /></label>
                     <label><span>Estado de pago</span><select value={form.estadoVenta} onChange={(event) => setForm({ ...form, estadoVenta: event.target.value as 'PAGADO' | 'PENDIENTE' })}><option value="PENDIENTE">Pendiente</option><option value="PAGADO">Pagado</option></select></label>
                     <label className="is-wide">
                       <span>Correo de acceso</span>

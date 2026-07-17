@@ -208,6 +208,8 @@ type ClientFormState = {
   telefono: string
   monto: string
   carpeta: string
+  fechaInicio: string
+  fechaCierre: string
   cuentaAccesoId: string
   dispositivos: string[]
   otroDispositivo: string
@@ -222,6 +224,8 @@ const emptyForm: ClientFormState = {
   telefono: '',
   monto: '',
   carpeta: '',
+  fechaInicio: '',
+  fechaCierre: '',
   cuentaAccesoId: '',
   dispositivos: [],
   otroDispositivo: '',
@@ -289,6 +293,11 @@ export function ClientIntakeForm() {
     if (step === 2) {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
+      if (!form.fechaInicio) return 'Selecciona la fecha en que inició el servicio.'
+      if (!form.fechaCierre) return 'Selecciona la próxima fecha de pago.'
+      if (form.fechaCierre < form.fechaInicio) {
+        return 'La próxima fecha de pago no puede ser anterior al inicio del servicio.'
+      }
       if (!form.cuentaAccesoId) {
         return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
       }
@@ -340,6 +349,8 @@ export function ClientIntakeForm() {
         telefono: `${getCountryCallingCode(form.country)}${phoneDigits}`,
         monto: Number(form.monto),
         carpeta: form.carpeta.trim(),
+        fechaInicio: form.fechaInicio,
+        fechaCierre: form.fechaCierre,
         cuentaAccesoId: Number(form.cuentaAccesoId),
         observacion: form.observacion.trim(),
         tipoDispositivo: selectedDevices,
@@ -464,6 +475,25 @@ export function ClientIntakeForm() {
           <label className="client-intake-field">
             <span>Nombre del proyecto *</span>
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
+          </label>
+
+          <label className="client-intake-field">
+            <span>Fecha de inicio del servicio *</span>
+            <input
+              type="date"
+              value={form.fechaInicio}
+              onChange={(event) => setForm({ ...form, fechaInicio: event.target.value })}
+            />
+          </label>
+
+          <label className="client-intake-field">
+            <span>Próxima fecha de pago *</span>
+            <input
+              type="date"
+              value={form.fechaCierre}
+              min={form.fechaInicio || undefined}
+              onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })}
+            />
           </label>
 
           <div className="client-intake-field client-intake-field--wide">

@@ -353,6 +353,24 @@
   cursor: default;
 }
 
+.client-intake-field input[type='date'] {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.client-intake-field input[type='date']::-webkit-calendar-picker-indicator {
+  padding: 4px;
+  border-radius: 7px;
+  cursor: pointer;
+  opacity: 0.82;
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.client-intake-field input[type='date']:hover::-webkit-calendar-picker-indicator {
+  background: rgba(59, 130, 246, 0.16);
+  opacity: 1;
+}
+
 .client-intake-country-select {
   position: relative;
   min-width: 0;

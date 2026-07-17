@@ -4259,8 +4259,11 @@ app.post('/solicitudes-clientes/public', async (req, res) => {
       });
     }
 
-    const fechaInicio = parseLocalDate(getCurrentDateInputForTimeZone('America/Lima'));
-    const fechaCierre = addMonthsPreserveDay(fechaInicio, 1);
+    const fechaInicio = parseLocalDate(req.body.fechaInicio || req.body.fecha_inicio);
+    const fechaCierre = parseLocalDate(req.body.fechaCierre || req.body.fecha_cierre);
+    if (!fechaInicio || !fechaCierre) {
+      throw new Error('La fecha de inicio y la próxima fecha de pago son obligatorias.');
+    }
     const cuentaAccesoId = await resolveAssignedAccount({
       assignmentMode: 'manual',
       cuentaAccesoId: req.body.cuentaAccesoId,
