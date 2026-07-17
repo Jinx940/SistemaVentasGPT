@@ -286,14 +286,11 @@ export function ClientIntakeForm() {
         <section className="client-intake-success" aria-live="polite">
           <div className="client-intake-success__icon"><AppIcon name="shield" size={34} /></div>
           <p className="client-intake-eyebrow">SOLICITUD RECIBIDA</p>
-          <h1>¡Gracias! Tus datos ya fueron enviados.</h1>
+          <h1>¡Gracias! Recibimos tu solicitud.</h1>
           <p>
-            Tu solicitud <strong>#{requestId}</strong> quedó pendiente de revisión. El administrador
-            podrá aprobarla o contactarte si necesita confirmar algún dato.
+            Tus datos fueron enviados correctamente. Revisaremos tu solicitud y nos comunicaremos
+            contigo para confirmar el servicio. No necesitas hacer nada más; ya puedes cerrar esta página.
           </p>
-          <button type="button" onClick={() => { setForm(emptyForm); setCurrentStep(1); setRequestId(null) }}>
-            Enviar otra solicitud
-          </button>
         </section>
       </main>
     )
@@ -484,6 +481,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
