@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   approveClientRequest,
+  getCuentas,
   getClientRequests,
   getErrorMessage,
   rejectClientRequest,
 } from '../api'
-import type { SolicitudCliente, SolicitudClienteReviewPayload } from '../types'
+import type { CuentaAcceso, SolicitudCliente, SolicitudClienteReviewPayload } from '../types'
 import { formatCurrencyPen, formatDateDisplay, toInputDate } from '../utils/ui'
 import { AppIcon } from './icons'
 import './client-request-inbox.css'
@@ -29,12 +30,14 @@ function requestToForm(request: SolicitudCliente): ReviewForm {
     fechaInicio: toInputDate(request.fechaInicio),
     fechaCierre: toInputDate(request.fechaCierre),
     estadoVenta: request.pagoRegistrado ? 'PAGADO' : 'PENDIENTE',
+    cuentaAccesoId: request.cuentaAccesoId ?? null,
     motivoRechazo: '',
   }
 }
 
 export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxProps) {
   const [requests, setRequests] = useState<SolicitudCliente[]>([])
+  const [accounts, setAccounts] = useState<CuentaAcceso[]>([])
   const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [form, setForm] = useState<ReviewForm | null>(null)
@@ -53,8 +56,12 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
   const loadRequests = useCallback(async (quiet = false) => {
     try {
       if (!quiet) setLoading(true)
-      const data = await getClientRequests('PENDIENTE')
+      const [data, accountData] = await Promise.all([
+        getClientRequests('PENDIENTE'),
+        getCuentas(),
+      ])
       setRequests(data)
+      setAccounts(accountData)
       setSelectedId((current) =>
         current && data.some((request) => request.id === current)
           ? current
@@ -105,6 +112,7 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
     if (!form.nombre.trim() || !form.telefono.trim()) return setError('Nombre y teléfono son obligatorios.')
     if (Number(form.monto) <= 0) return setError('El monto debe ser mayor a cero.')
     if (!form.carpeta.trim()) return setError('El nombre del proyecto es obligatorio.')
+    if (!form.cuentaAccesoId) return setError('Selecciona el correo de acceso del cliente.')
     if (!form.fechaInicio || !form.fechaCierre) return setError('Revisa las fechas del servicio.')
 
     try {
@@ -222,6 +230,20 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
                     <label><span>Fecha de inicio</span><input type="date" value={form.fechaInicio} onChange={(event) => setForm({ ...form, fechaInicio: event.target.value })} /></label>
                     <label><span>Fecha de cierre</span><input type="date" value={form.fechaCierre} onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })} /></label>
                     <label><span>Estado de pago</span><select value={form.estadoVenta} onChange={(event) => setForm({ ...form, estadoVenta: event.target.value as 'PAGADO' | 'PENDIENTE' })}><option value="PENDIENTE">Pendiente</option><option value="PAGADO">Pagado</option></select></label>
+                    <label className="is-wide">
+                      <span>Correo de acceso</span>
+                      <select
+                        value={form.cuentaAccesoId ?? ''}
+                        onChange={(event) => setForm({ ...form, cuentaAccesoId: Number(event.target.value) || null })}
+                      >
+                        <option value="">Selecciona un correo</option>
+                        {accounts
+                          .filter((account) => account.activa && ((account.free ?? 0) > 0 || account.id === form.cuentaAccesoId))
+                          .map((account) => (
+                            <option value={account.id} key={account.id}>{account.correo}</option>
+                          ))}
+                      </select>
+                    </label>
                     <label>
                       <span>Cantidad de dispositivos</span>
                       <input type="number" min="1" value={form.cantidadDispositivos} onChange={(event) => setForm({ ...form, cantidadDispositivos: Number(event.target.value) })} />
@@ -246,3 +268,4 @@ export function ClientRequestInbox({ isMobile, onApproved }: ClientRequestInboxP
     </>
   )
 }
+
