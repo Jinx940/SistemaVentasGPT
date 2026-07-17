@@ -38,13 +38,17 @@ model SolicitudCliente {
   motivoRechazo        String?
   clienteId            Int?
   ventaId              Int?
+  cuentaAccesoId       Int?
   revisadoPorId        Int?
   revisadoAt           DateTime?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
+  cuentaAcceso CuentaAcceso? @relation(fields: [cuentaAccesoId], references: [id], onDelete: SetNull)
+
   @@index([estado, createdAt])
   @@index([telefono])
+  @@index([cuentaAccesoId])
 }
 
 enum EstadoSolicitudCliente {
@@ -64,6 +68,7 @@ model CuentaAcceso {
   updatedAt   DateTime @updatedAt
 
   ventas Venta[]
+  solicitudesCliente SolicitudCliente[]
 }
 
 model HistorialBaja {
@@ -198,3 +203,4 @@ enum RolUsuario {
   ADMIN
   OPERADOR
 }
+
