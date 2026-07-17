@@ -522,7 +522,9 @@ export function ClientIntakeForm() {
     return (
       <main className="client-intake-page">
         <section className="client-intake-success" aria-live="polite">
-          <div className="client-intake-success__icon"><AppIcon name="shield" size={34} /></div>
+          <div className="client-intake-success__icon">
+            <img src={gptLogo} alt="Logo de Sistema de Cobro" />
+          </div>
           <p className="client-intake-eyebrow">DATOS GUARDADOS</p>
           <h1>¡Gracias! Tu servicio quedó registrado.</h1>
           <p className="client-intake-success__intro">
