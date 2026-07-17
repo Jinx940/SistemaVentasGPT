@@ -118,6 +118,81 @@ function CountrySelect({ value, onChange }: CountrySelectProps) {
   )
 }
 
+type PremiumSelectOption = {
+  value: string
+  label: string
+}
+
+type PremiumSelectProps = {
+  value: string
+  options: PremiumSelectOption[]
+  placeholder: string
+  ariaLabel: string
+  disabled?: boolean
+  onChange: (value: string) => void
+}
+
+function PremiumSelect({ value, options, placeholder, ariaLabel, disabled = false, onChange }: PremiumSelectProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const selectedOption = options.find((option) => option.value === value)
+
+  useEffect(() => {
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
+  }, [])
+
+  function selectOption(optionValue: string) {
+    onChange(optionValue)
+    setIsOpen(false)
+  }
+
+  return (
+    <div className="client-intake-premium-select" ref={rootRef}>
+      <button
+        type="button"
+        className="client-intake-premium-select__trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        disabled={disabled}
+        onClick={() => setIsOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setIsOpen(false)
+        }}
+      >
+        <span className={selectedOption ? '' : 'is-placeholder'}>{selectedOption?.label ?? placeholder}</span>
+        <span className="client-intake-premium-select__chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {isOpen && (
+        <div className="client-intake-premium-select__menu" role="listbox" aria-label={ariaLabel}>
+          {options.map((option) => {
+            const isSelected = option.value === value
+            return (
+              <button
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={isSelected ? 'is-selected' : ''}
+                key={option.value}
+                onClick={() => selectOption(option.value)}
+              >
+                <span>{option.label}</span>
+                <span className="client-intake-premium-select__check" aria-hidden="true">{isSelected ? '✓' : ''}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
 const formSteps = [
   { number: 1, label: 'Contacto' },
@@ -391,25 +466,21 @@ export function ClientIntakeForm() {
             <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
           </label>
 
-          <label className="client-intake-field client-intake-field--wide">
+          <div className="client-intake-field client-intake-field--wide">
             <span>Correo de acceso *</span>
-            <select
+            <PremiumSelect
               value={form.cuentaAccesoId}
-              onChange={(event) => setForm({ ...form, cuentaAccesoId: event.target.value })}
+              onChange={(cuentaAccesoId) => setForm({ ...form, cuentaAccesoId })}
               disabled={accountsLoading || accessAccounts.length === 0}
-            >
-              <option value="">
-                {accountsLoading
-                  ? 'Cargando correos...'
-                  : accessAccounts.length
-                    ? 'Selecciona el correo que te brindaron'
-                    : 'No hay correos disponibles'}
-              </option>
-              {accessAccounts.map((account) => (
-                <option value={account.id} key={account.id}>{account.correo}</option>
-              ))}
-            </select>
-          </label>
+              ariaLabel="Correo de acceso"
+              placeholder={accountsLoading
+                ? 'Cargando correos...'
+                : accessAccounts.length
+                  ? 'Selecciona el correo que te brindaron'
+                  : 'No hay correos disponibles'}
+              options={accessAccounts.map((account) => ({ value: String(account.id), label: account.correo }))}
+            />
+          </div>
             </div>
           </section>}
 
@@ -441,13 +512,19 @@ export function ClientIntakeForm() {
             <input value={selectedDeviceCount} type="number" min="0" readOnly aria-readonly="true" />
           </label>
 
-          <label className="client-intake-field">
+          <div className="client-intake-field">
             <span>¿Ya realizaste el pago mensual? *</span>
-            <select value={form.pagoRegistrado} onChange={(event) => setForm({ ...form, pagoRegistrado: event.target.value as 'SI' | 'NO' })}>
-              <option value="NO">Aún no he pagado</option>
-              <option value="SI">Sí, ya realicé el pago</option>
-            </select>
-          </label>
+            <PremiumSelect
+              value={form.pagoRegistrado}
+              onChange={(pagoRegistrado) => setForm({ ...form, pagoRegistrado: pagoRegistrado as 'SI' | 'NO' })}
+              ariaLabel="Estado del pago mensual"
+              placeholder="Selecciona el estado del pago"
+              options={[
+                { value: 'NO', label: 'Aún no he pagado' },
+                { value: 'SI', label: 'Sí, ya realicé el pago' },
+              ]}
+            />
+          </div>
 
           {additionalDeviceCount > 0 && (
             <div className="client-intake-device-cost" role="note">
@@ -489,6 +566,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
