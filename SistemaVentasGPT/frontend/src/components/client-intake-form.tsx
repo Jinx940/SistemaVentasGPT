@@ -626,7 +626,7 @@ export function ClientIntakeForm() {
 
           <label className="client-intake-field">
             <span>Nombre del proyecto *</span>
-            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Ejemplo: Ventas de mi negocio" />
+            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Nombre de tu carpeta" />
           </label>
 
           <label className="client-intake-field">
