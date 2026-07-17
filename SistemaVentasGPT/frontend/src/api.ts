@@ -9,6 +9,8 @@ import type {
   ChangePasswordPayload,
   Cliente,
   ClientePayload,
+  ClientPortalAdmin,
+  ClientPortalData,
   CuentaAcceso,
   CuentaAccesoPublica,
   CuentaPayload,
@@ -48,6 +50,7 @@ export const API_BASE = (
   configuredApiBase || (import.meta.env.PROD ? '/api' : 'http://localhost:3001')
 ).replace(/\/$/, '')
 const AUTH_TOKEN_KEY = 'sistema-cobro-auth-token'
+const CLIENT_PORTAL_TOKEN_KEY = 'sistema-cobro-client-portal-token'
 
 type QueryValue = string | number | boolean | null | undefined
 
@@ -211,6 +214,78 @@ export function deleteCliente(id: number) {
 
 export function sendClienteToBaja(id: number) {
   return apiFetch<{ ok: true }>(`/clientes/${id}/baja`, { method: 'POST' })
+}
+
+export function getClientPortalAdmin(id: number) {
+  return apiFetch<ClientPortalAdmin>(`/clientes/${id}/portal`)
+}
+
+export function resetClientPortalCode(id: number) {
+  return apiFetch<{ ok: true; codigo: string }>(`/clientes/${id}/portal/reset-code`, {
+    method: 'POST',
+  })
+}
+
+export function setClientPortalStatus(id: number, activo: boolean) {
+  return apiFetch<{ ok: true; activo: boolean }>(`/clientes/${id}/portal/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ activo }),
+  })
+}
+
+export function setClientPortalDeviceStatus(clienteId: number, deviceId: number, activo: boolean) {
+  return apiFetch<{ ok: true; activo: boolean }>(
+    `/clientes/${clienteId}/portal/devices/${deviceId}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activo }),
+    },
+  )
+}
+
+export function getStoredClientPortalToken() {
+  return window.localStorage.getItem(CLIENT_PORTAL_TOKEN_KEY) || ''
+}
+
+export function setStoredClientPortalToken(token: string) {
+  if (token) window.localStorage.setItem(CLIENT_PORTAL_TOKEN_KEY, token)
+  else window.localStorage.removeItem(CLIENT_PORTAL_TOKEN_KEY)
+}
+
+async function clientPortalFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers || {})
+  const token = getStoredClientPortalToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new ApiError(data?.error || 'No se pudo completar la solicitud.', response.status)
+  return data as T
+}
+
+export function loginClientPortal(payload: {
+  telefono: string
+  codigo: string
+  identificador: string
+  nombreDispositivo: string
+}) {
+  return clientPortalFetch<{ token: string; expiresAt: string; portal: ClientPortalData }>(
+    '/portal-cliente/login',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  )
+}
+
+export function getClientPortalMe() {
+  return clientPortalFetch<{ portal: ClientPortalData }>('/portal-cliente/me')
+}
+
+export function logoutClientPortal() {
+  return clientPortalFetch<{ ok: true }>('/portal-cliente/logout', { method: 'POST' })
 }
 
 export function getCuentas() {

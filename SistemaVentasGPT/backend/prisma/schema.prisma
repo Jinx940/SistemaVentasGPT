@@ -13,13 +13,55 @@ model Cliente {
   monto       Decimal  @default(0) @db.Decimal(10, 2)
   carpeta     String
   observacion String?
+  portalCodigoHash String?
+  portalActivo     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  ventas Venta[]
+  ventas          Venta[]
+  dispositivos    DispositivoCliente[]
+  sesionesPortal  SesionCliente[]
 
   @@index([nombre])
   @@index([telefono])
+}
+
+model DispositivoCliente {
+  id              Int      @id @default(autoincrement())
+  clienteId       Int
+  identificador   String
+  nombre          String?
+  ip              String?
+  userAgent       String?
+  activo          Boolean  @default(true)
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cliente Cliente        @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  sesiones SesionCliente[]
+
+  @@unique([clienteId, identificador])
+  @@index([clienteId, activo])
+  @@index([lastSeenAt])
+}
+
+model SesionCliente {
+  id            Int      @id @default(autoincrement())
+  clienteId     Int
+  dispositivoId Int
+  tokenHash     String   @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cliente     Cliente            @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  dispositivo DispositivoCliente @relation(fields: [dispositivoId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([dispositivoId])
+  @@index([expiresAt])
 }
 
 model SolicitudCliente {
