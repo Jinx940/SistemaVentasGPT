@@ -87,7 +87,6 @@ function CountrySelect({ value, onChange }: CountrySelectProps) {
             }}
             placeholder="Buscar país o prefijo"
             aria-label="Buscar país"
-            autoFocus
           />
           <div className="client-intake-country-options" role="listbox" aria-label="Países">
             {filteredCountries.map((country) => (
@@ -490,6 +489,7 @@ export function ClientIntakeForm() {
     </main>
   )
 }
+
 
 
 
