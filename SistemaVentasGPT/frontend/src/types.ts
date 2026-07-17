@@ -5,57 +5,11 @@ export type Cliente = {
   monto: number | string
   carpeta: string
   observacion?: string | null
-  portalActivo?: boolean
-  portalConfigurado?: boolean
-  dispositivosActivos?: number
   ventasActivas?: number
   deudaPendiente?: number
   ultimoCierre?: string | null
   createdAt?: string | null
   updatedAt?: string | null
-}
-
-export type ClientPortalDevice = {
-  id: number
-  nombre: string
-  ip: string
-  userAgent: string
-  activo: boolean
-  firstSeenAt: string | null
-  lastSeenAt: string | null
-}
-
-export type ClientPortalData = {
-  cliente: {
-    id: number
-    nombre: string
-    telefono: string
-    monto: number
-    carpeta: string
-  }
-  servicio: {
-    fechaInicio: string | null
-    fechaCierre: string | null
-    estado: string
-    monto: number
-    tipoDispositivo: string
-    limiteDispositivos: number
-    correoAcceso: string | null
-  } | null
-  dispositivos: {
-    activos: number
-    limite: number
-    actual: ClientPortalDevice | null
-  }
-}
-
-export type ClientPortalAdmin = {
-  cliente: Cliente
-  portalUrl: string
-  activo: boolean
-  configurado: boolean
-  limiteDispositivos: number
-  dispositivos: ClientPortalDevice[]
 }
 
 export type CuentaAcceso = {

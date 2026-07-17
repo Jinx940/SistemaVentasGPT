@@ -57,7 +57,6 @@ const ROLES_USUARIO = ['ADMIN', 'OPERADOR'];
 const COSTO_CHATGPT_POR_CUENTA = 90;
 const COSTO_POR_CORREO = COSTO_CHATGPT_POR_CUENTA;
 const SESSION_DURATION_DAYS = 7;
-const CLIENT_PORTAL_SESSION_DURATION_DAYS = 30;
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const WHATSAPP_AUTO_SEND_INTERVAL_MINUTES = Math.max(
@@ -151,20 +150,6 @@ function generateSessionToken() {
 
 function getSessionExpiryDate() {
   return new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
-}
-
-function getClientPortalSessionExpiryDate() {
-  return new Date(Date.now() + CLIENT_PORTAL_SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
-}
-
-function getRequestIp(req) {
-  return (
-    cleanText(req.headers['x-forwarded-for']).split(',')[0] ||
-    cleanText(req.headers['x-real-ip']) ||
-    cleanText(req.ip) ||
-    cleanText(req.socket?.remoteAddress) ||
-    'No disponible'
-  ).slice(0, 120);
 }
 
 function getLoginAttemptKey(req, correo) {
@@ -576,69 +561,11 @@ function toClienteDto(cliente) {
     monto: moneyNumber(cliente.monto),
     carpeta: cliente.carpeta || '',
     observacion: cliente.observacion || null,
-    portalActivo: !!cliente.portalActivo,
-    portalConfigurado: !!cliente.portalCodigoHash,
-    dispositivosActivos: Array.isArray(cliente.dispositivos)
-      ? cliente.dispositivos.filter((item) => item.activo).length
-      : Number(cliente._count?.dispositivos || 0),
     ventasActivas,
     deudaPendiente: round2(deudaPendiente),
     ultimoCierre,
     createdAt: toIsoDateTime(cliente.createdAt),
     updatedAt: toIsoDateTime(cliente.updatedAt),
-  };
-}
-
-function getPortalVenta(cliente) {
-  const ventas = Array.isArray(cliente?.ventas) ? cliente.ventas : [];
-  return ventas.find((venta) => cleanText(venta.estado) !== 'BAJA') || ventas[0] || null;
-}
-
-function getPortalDeviceLimit(cliente) {
-  const venta = getPortalVenta(cliente);
-  return Math.max(1, Number(venta?.cantidadDispositivos || 1));
-}
-
-function toPortalDeviceDto(dispositivo) {
-  if (!dispositivo) return null;
-  return {
-    id: dispositivo.id,
-    nombre: dispositivo.nombre || 'Dispositivo sin nombre',
-    ip: dispositivo.ip || 'No disponible',
-    userAgent: dispositivo.userAgent || '',
-    activo: !!dispositivo.activo,
-    firstSeenAt: toIsoDateTime(dispositivo.firstSeenAt),
-    lastSeenAt: toIsoDateTime(dispositivo.lastSeenAt),
-  };
-}
-
-function toClientPortalDto(cliente, currentDevice = null) {
-  const venta = getPortalVenta(cliente);
-  const dispositivos = Array.isArray(cliente.dispositivos) ? cliente.dispositivos : [];
-  return {
-    cliente: {
-      id: cliente.id,
-      nombre: cliente.nombre || '',
-      telefono: cliente.telefono || '',
-      monto: moneyNumber(cliente.monto),
-      carpeta: cliente.carpeta || '',
-    },
-    servicio: venta
-      ? {
-          fechaInicio: toIsoDateTime(venta.fechaInicio),
-          fechaCierre: toIsoDateTime(venta.fechaCierre),
-          estado: getVentaEstadoActual(venta),
-          monto: moneyNumber(venta.monto),
-          tipoDispositivo: venta.tipoDispositivo || '',
-          limiteDispositivos: getPortalDeviceLimit(cliente),
-          correoAcceso: venta.cuentaAcceso?.correo || null,
-        }
-      : null,
-    dispositivos: {
-      activos: dispositivos.filter((item) => item.activo).length,
-      limite: getPortalDeviceLimit(cliente),
-      actual: toPortalDeviceDto(currentDevice),
-    },
   };
 }
 
@@ -1180,7 +1107,6 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
     usuarios,
     sesiones,
     clientes,
-    dispositivosClientes,
     solicitudesClientes,
     cuentas,
     ventas,
@@ -1193,7 +1119,6 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
     prisma.usuarioSistema.findMany({ orderBy: { id: 'asc' } }),
     prisma.sesionSistema.findMany({ orderBy: { id: 'asc' } }),
     prisma.cliente.findMany({ orderBy: { id: 'asc' } }),
-    prisma.dispositivoCliente.findMany({ orderBy: { id: 'asc' } }),
     prisma.solicitudCliente.findMany({ orderBy: { id: 'asc' } }),
     prisma.cuentaAcceso.findMany({ orderBy: { id: 'asc' } }),
     prisma.venta.findMany({ orderBy: { id: 'asc' } }),
@@ -1246,21 +1171,6 @@ async function buildSystemBackupSnapshot(trigger = 'MANUAL') {
         monto: serializeMoneyValue(item.monto),
         carpeta: item.carpeta,
         observacion: item.observacion || null,
-        portalCodigoHash: item.portalCodigoHash || null,
-        portalActivo: !!item.portalActivo,
-        createdAt: serializeDateValue(item.createdAt),
-        updatedAt: serializeDateValue(item.updatedAt),
-      })),
-      dispositivosClientes: dispositivosClientes.map((item) => ({
-        id: item.id,
-        clienteId: item.clienteId,
-        identificador: item.identificador,
-        nombre: item.nombre || null,
-        ip: item.ip || null,
-        userAgent: item.userAgent || null,
-        activo: !!item.activo,
-        firstSeenAt: serializeDateValue(item.firstSeenAt),
-        lastSeenAt: serializeDateValue(item.lastSeenAt),
         createdAt: serializeDateValue(item.createdAt),
         updatedAt: serializeDateValue(item.updatedAt),
       })),
@@ -1548,26 +1458,6 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
           monto: item.monto,
           carpeta: item.carpeta,
           observacion: item.observacion,
-          portalCodigoHash: item.portalCodigoHash || null,
-          portalActivo: !!item.portalActivo,
-          createdAt: parseDateOrNull(item.createdAt) || undefined,
-          updatedAt: parseDateOrNull(item.updatedAt) || undefined,
-        })),
-      });
-    }
-
-    if (Array.isArray(data.dispositivosClientes) && data.dispositivosClientes.length) {
-      await tx.dispositivoCliente.createMany({
-        data: data.dispositivosClientes.map((item) => ({
-          id: item.id,
-          clienteId: item.clienteId,
-          identificador: item.identificador,
-          nombre: item.nombre,
-          ip: item.ip,
-          userAgent: item.userAgent,
-          activo: !!item.activo,
-          firstSeenAt: parseDateOrNull(item.firstSeenAt) || undefined,
-          lastSeenAt: parseDateOrNull(item.lastSeenAt) || undefined,
           createdAt: parseDateOrNull(item.createdAt) || undefined,
           updatedAt: parseDateOrNull(item.updatedAt) || undefined,
         })),
@@ -1722,7 +1612,6 @@ async function restoreSystemBackup(storageKey, { usuarioId = null } = {}) {
     await resetTableSequence(tx, 'UsuarioSistema');
     await resetTableSequence(tx, 'SesionSistema');
     await resetTableSequence(tx, 'Cliente');
-    await resetTableSequence(tx, 'DispositivoCliente');
     await resetTableSequence(tx, 'SolicitudCliente');
     await resetTableSequence(tx, 'CuentaAcceso');
     await resetTableSequence(tx, 'Venta');
@@ -2015,62 +1904,6 @@ function requireRole(...roles) {
       next();
     });
   };
-}
-
-async function getClientPortalAuthFromRequest(req) {
-  const authHeader = cleanText(req.headers.authorization);
-  if (!authHeader.toLowerCase().startsWith('bearer ')) return null;
-
-  const token = cleanText(authHeader.slice(7));
-  if (!token) return null;
-
-  const session = await prisma.sesionCliente.findUnique({
-    where: { tokenHash: hashToken(token) },
-    include: {
-      cliente: {
-        include: {
-          dispositivos: { orderBy: { lastSeenAt: 'desc' } },
-          ventas: {
-            include: { cuentaAcceso: { select: { correo: true } } },
-            orderBy: [{ fechaCierre: 'desc' }, { id: 'desc' }],
-          },
-        },
-      },
-      dispositivo: true,
-    },
-  });
-
-  if (
-    !session ||
-    !session.cliente?.portalActivo ||
-    !session.dispositivo?.activo ||
-    new Date(session.expiresAt).getTime() <= Date.now()
-  ) {
-    if (session) await prisma.sesionCliente.deleteMany({ where: { id: session.id } });
-    return null;
-  }
-
-  const dispositivo = await prisma.dispositivoCliente.update({
-    where: { id: session.dispositivoId },
-    data: {
-      ip: getRequestIp(req),
-      userAgent: cleanText(req.headers['user-agent']).slice(0, 500) || null,
-      lastSeenAt: new Date(),
-    },
-  });
-
-  return { token, session, cliente: session.cliente, dispositivo };
-}
-
-async function requireClientPortalAuth(req, res, next) {
-  try {
-    const auth = await getClientPortalAuthFromRequest(req);
-    if (!auth) return res.status(401).json({ error: 'Tu sesión terminó. Ingresa nuevamente.' });
-    req.clientPortalAuth = auth;
-    next();
-  } catch (error) {
-    next(error);
-  }
 }
 
 async function buildAuthPayload(usuario) {
@@ -4687,231 +4520,16 @@ app.post('/solicitudes-clientes/:id/rechazar', requireRole('ADMIN'), async (req,
    CLIENTES
 ========================= */
 
-app.post('/portal-cliente/login', async (req, res) => {
-  try {
-    const telefono = normalizeClientPhone(req.body.telefono);
-    const codigo = cleanText(req.body.codigo);
-    const identificador = cleanText(req.body.identificador).slice(0, 160);
-    const nombreDispositivo = cleanText(req.body.nombreDispositivo).slice(0, 120);
-    const attemptKey = `portal|${getLoginAttemptKey(req, telefono)}`;
-    const throttleMs = getLoginThrottleMs(attemptKey);
-
-    if (throttleMs > 0) {
-      return res.status(429).json({
-        error: `Demasiados intentos. Intenta nuevamente en ${Math.ceil(throttleMs / 60000)} minutos.`,
-      });
-    }
-
-    if (!telefono || !/^\d{6}$/.test(codigo) || !identificador) {
-      return res.status(400).json({ error: 'Ingresa tu teléfono, código de 6 dígitos y dispositivo.' });
-    }
-
-    const clienteBase = await findClienteByTelefono(telefono);
-    const cliente = clienteBase
-      ? await prisma.cliente.findUnique({
-          where: { id: clienteBase.id },
-          include: {
-            dispositivos: { orderBy: { lastSeenAt: 'desc' } },
-            ventas: {
-              include: { cuentaAcceso: { select: { correo: true } } },
-              orderBy: [{ fechaCierre: 'desc' }, { id: 'desc' }],
-            },
-          },
-        })
-      : null;
-
-    if (
-      !cliente ||
-      !cliente.portalActivo ||
-      !cliente.portalCodigoHash ||
-      !(await bcrypt.compare(codigo, cliente.portalCodigoHash))
-    ) {
-      registerFailedLoginAttempt(attemptKey);
-      return res.status(401).json({ error: 'Teléfono o código incorrecto.' });
-    }
-
-    const limite = getPortalDeviceLimit(cliente);
-    let dispositivo = cliente.dispositivos.find((item) => item.identificador === identificador);
-    const activos = cliente.dispositivos.filter((item) => item.activo).length;
-
-    if (dispositivo && !dispositivo.activo) {
-      return res.status(403).json({
-        error: 'Este dispositivo está bloqueado. Solicita autorización al administrador.',
-      });
-    }
-
-    if (!dispositivo && activos >= limite) {
-      return res.status(403).json({
-        error: `Alcanzaste el límite de ${limite} dispositivo${limite === 1 ? '' : 's'}. Comunícate con el administrador para autorizar otro acceso.`,
-      });
-    }
-
-    const deviceData = {
-      nombre: nombreDispositivo || 'Navegador del cliente',
-      ip: getRequestIp(req),
-      userAgent: cleanText(req.headers['user-agent']).slice(0, 500) || null,
-      activo: true,
-      lastSeenAt: new Date(),
-    };
-
-    dispositivo = dispositivo
-      ? await prisma.dispositivoCliente.update({ where: { id: dispositivo.id }, data: deviceData })
-      : await prisma.dispositivoCliente.create({
-          data: { clienteId: cliente.id, identificador, ...deviceData },
-        });
-
-    await prisma.sesionCliente.deleteMany({
-      where: { dispositivoId: dispositivo.id, expiresAt: { lte: new Date() } },
-    });
-    const token = generateSessionToken();
-    const expiresAt = getClientPortalSessionExpiryDate();
-    await prisma.sesionCliente.create({
-      data: {
-        clienteId: cliente.id,
-        dispositivoId: dispositivo.id,
-        tokenHash: hashToken(token),
-        expiresAt,
-      },
-    });
-    clearLoginAttempts(attemptKey);
-
-    const refreshed = await prisma.cliente.findUnique({
-      where: { id: cliente.id },
-      include: {
-        dispositivos: { orderBy: { lastSeenAt: 'desc' } },
-        ventas: {
-          include: { cuentaAcceso: { select: { correo: true } } },
-          orderBy: [{ fechaCierre: 'desc' }, { id: 'desc' }],
-        },
-      },
-    });
-
-    res.json({ token, expiresAt: toIsoDateTime(expiresAt), portal: toClientPortalDto(refreshed, dispositivo) });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: getFriendlyErrorMessage(error, 'No se pudo iniciar sesión.') });
-  }
-});
-
-app.get('/portal-cliente/me', requireClientPortalAuth, async (req, res) => {
-  res.json({ portal: toClientPortalDto(req.clientPortalAuth.cliente, req.clientPortalAuth.dispositivo) });
-});
-
-app.post('/portal-cliente/logout', requireClientPortalAuth, async (req, res) => {
-  await prisma.sesionCliente.deleteMany({
-    where: { tokenHash: hashToken(req.clientPortalAuth.token) },
-  });
-  res.json({ ok: true });
-});
-
-app.get('/clientes/:id/portal', requireRole('ADMIN'), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const cliente = await prisma.cliente.findUnique({
-      where: { id },
-      include: {
-        dispositivos: { orderBy: { lastSeenAt: 'desc' } },
-        ventas: { orderBy: [{ fechaCierre: 'desc' }, { id: 'desc' }] },
-      },
-    });
-    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado.' });
-
-    res.json({
-      cliente: toClienteDto(cliente),
-      portalUrl: `${getPublicBackendUrl()}/portal-cliente`,
-      activo: !!cliente.portalActivo,
-      configurado: !!cliente.portalCodigoHash,
-      limiteDispositivos: getPortalDeviceLimit(cliente),
-      dispositivos: cliente.dispositivos.map(toPortalDeviceDto),
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: getFriendlyErrorMessage(error, 'No se pudo abrir el portal.') });
-  }
-});
-
-app.post('/clientes/:id/portal/reset-code', requireRole('ADMIN'), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const cliente = await prisma.cliente.findUnique({ where: { id } });
-    if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado.' });
-
-    const codigo = String(crypto.randomInt(100000, 1000000));
-    await prisma.$transaction([
-      prisma.cliente.update({
-        where: { id },
-        data: { portalCodigoHash: await bcrypt.hash(codigo, 10), portalActivo: true },
-      }),
-      prisma.sesionCliente.deleteMany({ where: { clienteId: id } }),
-    ]);
-    await registrarActividad({
-      usuarioId: req.authUser?.id,
-      accion: 'ACTUALIZAR',
-      entidad: 'CLIENTE',
-      entidadId: id,
-      descripcion: `Código del portal renovado para ${cliente.nombre}.`,
-    });
-    res.json({ ok: true, codigo });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: getFriendlyErrorMessage(error, 'No se pudo generar el código.') });
-  }
-});
-
-app.put('/clientes/:id/portal/status', requireRole('ADMIN'), async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const activo = parseBoolean(req.body.activo);
-    await prisma.cliente.update({ where: { id }, data: { portalActivo: activo } });
-    if (!activo) await prisma.sesionCliente.deleteMany({ where: { clienteId: id } });
-    res.json({ ok: true, activo });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: getFriendlyErrorMessage(error, 'No se pudo actualizar el portal.') });
-  }
-});
-
-app.put('/clientes/:id/portal/devices/:deviceId', requireRole('ADMIN'), async (req, res) => {
-  try {
-    const clienteId = Number(req.params.id);
-    const deviceId = Number(req.params.deviceId);
-    const activo = parseBoolean(req.body.activo);
-    const cliente = await prisma.cliente.findUnique({
-      where: { id: clienteId },
-      include: {
-        dispositivos: true,
-        ventas: { orderBy: [{ fechaCierre: 'desc' }, { id: 'desc' }] },
-      },
-    });
-    const dispositivo = cliente?.dispositivos.find((item) => item.id === deviceId);
-    if (!cliente || !dispositivo) return res.status(404).json({ error: 'Dispositivo no encontrado.' });
-
-    const activos = cliente.dispositivos.filter((item) => item.activo && item.id !== deviceId).length;
-    if (activo && activos >= getPortalDeviceLimit(cliente)) {
-      return res.status(400).json({ error: 'Primero bloquea otro dispositivo o aumenta el límite contratado.' });
-    }
-
-    await prisma.dispositivoCliente.update({ where: { id: deviceId }, data: { activo } });
-    if (!activo) await prisma.sesionCliente.deleteMany({ where: { dispositivoId: deviceId } });
-    res.json({ ok: true, activo });
-  } catch (error) {
-    console.error(error);
-    res.status(400).json({ error: getFriendlyErrorMessage(error, 'No se pudo actualizar el dispositivo.') });
-  }
-});
-
 app.get('/clientes', requireAuth, async (req, res) => {
   try {
     const clientes = await prisma.cliente.findMany({
       include: {
-        dispositivos: { where: { activo: true }, select: { id: true, activo: true } },
         ventas: {
           select: {
             estado: true,
             monto: true,
             descuento: true,
             fechaCierre: true,
-            cantidadDispositivos: true,
           },
         },
       },

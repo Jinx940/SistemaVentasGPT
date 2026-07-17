@@ -90,8 +90,6 @@ import { AuthCard } from './components/auth-card'
 import { AppIcon } from './components/icons'
 import { ClientIntakeForm } from './components/client-intake-form'
 import { ClientRequestInbox } from './components/client-request-inbox'
-import { ClientPortalManager } from './components/client-portal-manager'
-import { ClientPortal } from './components/client-portal'
 import {
   addMonthsToInputDate,
   formatCurrencyPen,
@@ -1202,7 +1200,6 @@ function AdminApp() {
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
 
   const [clientes, setClientes] = useState<Cliente[]>([])
-  const [portalCliente, setPortalCliente] = useState<Cliente | null>(null)
   const [cuentas, setCuentas] = useState<CuentaAcceso[]>([])
   const [ventas, setVentas] = useState<Venta[]>([])
   const [ventasMeta, setVentasMeta] = useState<VentasMetaState>(emptyVentasMeta)
@@ -5642,11 +5639,6 @@ function AdminApp() {
                                   <button type="button" onClick={() => editarCliente(cliente)} style={buttonInfo}>
                                     Editar
                                   </button>
-                                  {isAdmin && (
-                                    <button type="button" onClick={() => setPortalCliente(cliente)} style={buttonSuccess}>
-                                      Portal
-                                    </button>
-                                  )}
                                   <button
                                     type="button"
                                     onClick={() => enviarClienteABaja(cliente)}
@@ -7291,14 +7283,6 @@ function AdminApp() {
               />
             )}
 
-            {portalCliente && (
-              <ClientPortalManager
-                cliente={portalCliente}
-                onClose={() => setPortalCliente(null)}
-                onUpdated={cargarClientes}
-              />
-            )}
-
             {activeTab !== 'morosos' && (
               <FloatingMorososButton
                 count={morososPendientesCount}
@@ -7319,9 +7303,7 @@ function AdminApp() {
 
 function App() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  if (path === '/formulario-cliente') return <ClientIntakeForm />
-  if (path === '/portal-cliente') return <ClientPortal />
-  return <AdminApp />
+  return path === '/formulario-cliente' ? <ClientIntakeForm /> : <AdminApp />
 }
 
 const cardStyle: React.CSSProperties = {
