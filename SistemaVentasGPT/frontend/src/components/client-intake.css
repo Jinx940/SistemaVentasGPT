@@ -353,23 +353,270 @@
   cursor: default;
 }
 
-.client-intake-field input[type='date'] {
-  color-scheme: dark;
+.client-intake-date-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.client-intake-date-picker.is-open { z-index: 210; }
+
+.client-intake-date-picker__trigger {
+  position: relative;
+  z-index: 211;
+  width: 100%;
+  min-height: 50px;
+  padding: 7px 12px 7px 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #26334b;
+  border-radius: 13px;
+  color: #f8fafc;
+  background: linear-gradient(145deg, rgba(17, 27, 49, 0.96), rgba(9, 17, 35, 0.98));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.035) inset;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.client-intake-date-picker__trigger:hover,
+.client-intake-date-picker__trigger[aria-expanded='true'] {
+  border-color: #3b82f6;
+  background: linear-gradient(145deg, rgba(20, 38, 69, 0.98), rgba(8, 22, 45, 0.98));
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12), 0 14px 30px rgba(2, 6, 23, 0.25);
+  transform: translateY(-1px);
+}
+
+.client-intake-date-picker__trigger > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-intake-date-picker__trigger .is-placeholder { color: #8290a7; }
+
+.client-intake-date-picker__icon {
+  width: 35px;
+  height: 35px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 10px;
+  color: #bfdbfe;
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.36), rgba(14, 165, 233, 0.12));
+  box-shadow: 0 8px 18px rgba(30, 64, 175, 0.2);
+}
+
+.client-intake-date-picker__icon svg { width: 18px; height: 18px; }
+
+.client-intake-date-picker__chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #93c5fd;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.22s ease;
+}
+
+.client-intake-date-picker__trigger[aria-expanded='true'] .client-intake-date-picker__chevron {
+  transform: rotate(180deg);
+}
+
+.client-intake-date-picker__backdrop {
+  position: fixed;
+  z-index: 212;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.client-intake-date-picker__menu {
+  position: absolute;
+  z-index: 213;
+  top: calc(100% + 10px);
+  width: min(342px, calc(100vw - 40px));
+  padding: 15px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 19px;
+  color: #e2e8f0;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.18), transparent 38%),
+    linear-gradient(155deg, rgba(15, 27, 51, 0.995), rgba(5, 13, 30, 0.995));
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.68), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  backdrop-filter: blur(24px);
+  animation: client-intake-calendar-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.client-intake-date-picker__menu.is-start { left: 0; }
+.client-intake-date-picker__menu.is-end { right: 0; }
+
+@keyframes client-intake-calendar-in {
+  from { opacity: 0; transform: translateY(-7px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.client-intake-date-picker__header {
+  padding: 2px 2px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+}
+
+.client-intake-date-picker__header small,
+.client-intake-date-picker__header strong { display: block; }
+
+.client-intake-date-picker__header small {
+  margin-bottom: 4px;
+  color: #60a5fa;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.client-intake-date-picker__header strong {
+  color: #f8fafc;
+  font-size: 16px;
+  text-transform: capitalize;
+}
+
+.client-intake-date-picker__header > div:last-child { display: flex; gap: 7px; }
+
+.client-intake-date-picker__header button {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 11px;
+  color: #bfdbfe;
+  background: rgba(30, 58, 138, 0.2);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.client-intake-date-picker__header button:hover {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(37, 99, 235, 0.34);
+  transform: translateY(-1px);
+}
+
+.client-intake-date-picker__weekdays,
+.client-intake-date-picker__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.client-intake-date-picker__weekdays {
+  padding: 13px 2px 7px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.client-intake-date-picker__days { gap: 3px; }
+
+.client-intake-date-picker__days button {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: #dbeafe;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.client-intake-date-picker__days button:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.32);
+  color: #fff;
+  background: rgba(37, 99, 235, 0.2);
+  transform: translateY(-1px) scale(1.04);
+}
+
+.client-intake-date-picker__days button.is-outside { color: #475569; }
+
+.client-intake-date-picker__days button.is-today:not(.is-selected) {
+  border-color: rgba(56, 189, 248, 0.38);
+  color: #7dd3fc;
+}
+
+.client-intake-date-picker__days button.is-today:not(.is-selected)::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #38bdf8;
+  transform: translateX(-50%);
+}
+
+.client-intake-date-picker__days button.is-selected {
+  border-color: #60a5fa;
+  color: #fff;
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.38), 0 0 16px rgba(56, 189, 248, 0.14);
+  transform: scale(1.03);
+}
+
+.client-intake-date-picker__days button:disabled {
+  color: #334155;
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.client-intake-date-picker__footer {
+  margin-top: 12px;
+  padding: 12px 2px 1px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(148, 163, 184, 0.11);
+}
+
+.client-intake-date-picker__footer > span {
+  min-width: 0;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-intake-date-picker__footer button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(96, 165, 250, 0.26);
+  border-radius: 9px;
+  padding: 7px 11px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.18);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.client-intake-field input[type='date']::-webkit-calendar-picker-indicator {
-  padding: 4px;
-  border-radius: 7px;
-  cursor: pointer;
-  opacity: 0.82;
-  transition: background 0.18s ease, opacity 0.18s ease;
-}
-
-.client-intake-field input[type='date']:hover::-webkit-calendar-picker-indicator {
-  background: rgba(59, 130, 246, 0.16);
-  opacity: 1;
-}
+.client-intake-date-picker__footer button:hover:not(:disabled) { background: rgba(37, 99, 235, 0.34); }
+.client-intake-date-picker__footer button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .client-intake-country-select {
   position: relative;
@@ -883,6 +1130,27 @@
   .client-intake-country-menu > input { font-size: 16px; }
   .client-intake-premium-select__trigger { min-height: 48px; font-size: 16px; }
   .client-intake-premium-select__menu button { min-height: 50px; font-size: 15px; }
+  .client-intake-date-picker__trigger { min-height: 52px; font-size: 15px; }
+  .client-intake-date-picker__backdrop {
+    background: rgba(2, 6, 23, 0.68);
+    backdrop-filter: blur(5px);
+    animation: client-intake-calendar-backdrop-in 0.2s ease-out;
+  }
+  .client-intake-date-picker__menu,
+  .client-intake-date-picker__menu.is-start,
+  .client-intake-date-picker__menu.is-end {
+    position: fixed;
+    z-index: 213;
+    top: 50%;
+    right: auto;
+    left: 50%;
+    width: min(360px, calc(100vw - 28px));
+    padding: 16px;
+    transform: translate(-50%, -50%);
+    animation: client-intake-calendar-sheet-in 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .client-intake-date-picker__days { gap: 4px; }
+  .client-intake-date-picker__days button { min-height: 39px; font-size: 13px; }
   .client-intake-money-input input { padding-left: 48px; }
   .client-intake-chip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
   .client-intake-chip-list button { min-height: 44px; padding: 10px 8px; }
@@ -896,6 +1164,16 @@
   .client-intake-page { padding: 0; place-items: stretch; }
   .client-intake-shell { min-height: 100vh; border: 0; border-radius: 0; }
   .client-intake-header { border-radius: 0; }
+}
+
+@keyframes client-intake-calendar-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes client-intake-calendar-sheet-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 @media (max-width: 360px) {
@@ -914,6 +1192,8 @@
   .client-intake-progress-track > span::after,
   .client-intake-country-menu,
   .client-intake-premium-select__menu,
+  .client-intake-date-picker__backdrop,
+  .client-intake-date-picker__menu,
   .client-intake-step-list button.is-active,
   .client-intake-chip-list button.is-selected,
   .client-intake-submit,
@@ -934,6 +1214,10 @@
   .client-intake-premium-select__trigger,
   .client-intake-premium-select__chevron,
   .client-intake-premium-select__menu button,
+  .client-intake-date-picker__trigger,
+  .client-intake-date-picker__chevron,
+  .client-intake-date-picker__header button,
+  .client-intake-date-picker__days button,
   .client-intake-submit,
   .client-intake-back { transition: none; }
 }

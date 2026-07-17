@@ -193,6 +193,158 @@ function PremiumSelect({ value, options, placeholder, ariaLabel, disabled = fals
   )
 }
 
+const calendarWeekDays = ['LU', 'MA', 'MI', 'JU', 'VI', 'SÁ', 'DO']
+const calendarMonthFormatter = new Intl.DateTimeFormat('es-PE', {
+  month: 'long',
+  year: 'numeric',
+})
+
+function dateFromInput(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, 12)
+}
+
+function dateToInput(value: Date) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatCalendarDate(value: string) {
+  const date = dateFromInput(value)
+  return date
+    ? new Intl.DateTimeFormat('es-PE', { day: '2-digit', month: 'long', year: 'numeric' }).format(date)
+    : ''
+}
+
+type PremiumDatePickerProps = {
+  value: string
+  placeholder: string
+  ariaLabel: string
+  min?: string
+  align?: 'start' | 'end'
+  onChange: (value: string) => void
+}
+
+function PremiumDatePicker({ value, placeholder, ariaLabel, min, align = 'start', onChange }: PremiumDatePickerProps) {
+  const selectedDate = dateFromInput(value)
+  const [isOpen, setIsOpen] = useState(false)
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const initial = selectedDate ?? dateFromInput(min ?? '') ?? new Date()
+    return new Date(initial.getFullYear(), initial.getMonth(), 1, 12)
+  })
+  const rootRef = useRef<HTMLDivElement>(null)
+  const todayValue = dateToInput(new Date())
+  const firstDayOffset = (visibleMonth.getDay() + 6) % 7
+  const monthDays = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth() + 1,
+    0,
+    12,
+  ).getDate()
+
+  function moveMonth(offset: number) {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1, 12))
+  }
+
+  function toggleCalendar() {
+    if (!isOpen) {
+      const current = dateFromInput(value) ?? dateFromInput(min ?? '') ?? new Date()
+      setVisibleMonth(new Date(current.getFullYear(), current.getMonth(), 1, 12))
+    }
+    setIsOpen((current) => !current)
+  }
+
+  function selectDate(dateValue: string) {
+    if (min && dateValue < min) return
+    onChange(dateValue)
+    setIsOpen(false)
+  }
+
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const dayNumber = index - firstDayOffset + 1
+    const date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), dayNumber, 12)
+    const dateValue = dateToInput(date)
+    return {
+      dateValue,
+      day: date.getDate(),
+      isCurrentMonth: dayNumber >= 1 && dayNumber <= monthDays,
+      isDisabled: Boolean(min && dateValue < min),
+    }
+  })
+
+  return (
+    <div className={`client-intake-date-picker ${isOpen ? 'is-open' : ''}`} ref={rootRef}>
+      <button
+        type="button"
+        className="client-intake-date-picker__trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        onClick={toggleCalendar}
+      >
+        <span className="client-intake-date-picker__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="5" width="18" height="16" rx="3" />
+            <path d="M8 3v4M16 3v4M3 10h18" />
+          </svg>
+        </span>
+        <span className={value ? '' : 'is-placeholder'}>{value ? formatCalendarDate(value) : placeholder}</span>
+        <span className="client-intake-date-picker__chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {isOpen && (
+        <>
+          <button type="button" className="client-intake-date-picker__backdrop" aria-label="Cerrar calendario" onClick={() => setIsOpen(false)} />
+          <div className={`client-intake-date-picker__menu is-${align}`} role="dialog" aria-modal="true" aria-label={ariaLabel}>
+            <header className="client-intake-date-picker__header">
+              <div>
+                <small>SELECCIONA UNA FECHA</small>
+                <strong>{calendarMonthFormatter.format(visibleMonth)}</strong>
+              </div>
+              <div>
+                <button type="button" onClick={() => moveMonth(-1)} aria-label="Mes anterior">‹</button>
+                <button type="button" onClick={() => moveMonth(1)} aria-label="Mes siguiente">›</button>
+              </div>
+            </header>
+
+            <div className="client-intake-date-picker__weekdays" aria-hidden="true">
+              {calendarWeekDays.map((day) => <span key={day}>{day}</span>)}
+            </div>
+
+            <div className="client-intake-date-picker__days">
+              {calendarDays.map((date) => (
+                <button
+                  type="button"
+                  key={date.dateValue}
+                  className={[
+                    date.isCurrentMonth ? '' : 'is-outside',
+                    date.dateValue === value ? 'is-selected' : '',
+                    date.dateValue === todayValue ? 'is-today' : '',
+                  ].filter(Boolean).join(' ')}
+                  disabled={date.isDisabled}
+                  aria-label={formatCalendarDate(date.dateValue)}
+                  aria-pressed={date.dateValue === value}
+                  onClick={() => selectDate(date.dateValue)}
+                >
+                  {date.day}
+                </button>
+              ))}
+            </div>
+
+            <footer className="client-intake-date-picker__footer">
+              <span>{value ? formatCalendarDate(value) : 'Ninguna fecha seleccionada'}</span>
+              <button type="button" disabled={Boolean(min && todayValue < min)} onClick={() => selectDate(todayValue)}>Hoy</button>
+            </footer>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 const deviceOptions = ['Celular', 'Laptop', 'PC', 'Tablet']
 const formSteps = [
   { number: 1, label: 'Contacto' },
@@ -479,20 +631,27 @@ export function ClientIntakeForm() {
 
           <label className="client-intake-field">
             <span>Fecha de inicio del servicio *</span>
-            <input
-              type="date"
+            <PremiumDatePicker
               value={form.fechaInicio}
-              onChange={(event) => setForm({ ...form, fechaInicio: event.target.value })}
+              placeholder="Selecciona la fecha de inicio"
+              ariaLabel="Fecha de inicio del servicio"
+              onChange={(fechaInicio) => setForm((current) => ({
+                ...current,
+                fechaInicio,
+                fechaCierre: current.fechaCierre && current.fechaCierre < fechaInicio ? '' : current.fechaCierre,
+              }))}
             />
           </label>
 
           <label className="client-intake-field">
             <span>Próxima fecha de pago *</span>
-            <input
-              type="date"
+            <PremiumDatePicker
               value={form.fechaCierre}
               min={form.fechaInicio || undefined}
-              onChange={(event) => setForm({ ...form, fechaCierre: event.target.value })}
+              placeholder="Selecciona la fecha de pago"
+              ariaLabel="Próxima fecha de pago"
+              align="end"
+              onChange={(fechaCierre) => setForm({ ...form, fechaCierre })}
             />
           </label>
 
