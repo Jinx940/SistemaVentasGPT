@@ -10,6 +10,7 @@ import type {
   Cliente,
   ClientePayload,
   CuentaAcceso,
+  CuentaAccesoPublica,
   CuentaPayload,
   DashboardResumenQuery,
   DashboardResumenResponse,
@@ -251,6 +252,10 @@ export function submitClientRequest(payload: SolicitudClientePublicPayload) {
   )
 }
 
+export function getPublicAccessAccounts() {
+  return apiFetch<CuentaAccesoPublica[]>('/solicitudes-clientes/public/cuentas')
+}
+
 export function getClientRequests(estado = 'PENDIENTE') {
   return apiFetch<SolicitudCliente[]>(
     `/solicitudes-clientes${buildQueryString({ estado })}`,
@@ -385,3 +390,4 @@ export function restoreSystemBackup(key: string) {
     method: 'POST',
   })
 }
+
