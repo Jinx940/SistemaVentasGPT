@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min'
 import { getErrorMessage, getPublicAccessAccounts, submitClientRequest } from '../api'
 import gptLogo from '../assets/GPT.png'
 import type { CuentaAccesoPublica } from '../types'
@@ -22,6 +22,11 @@ const phoneCountries = getCountries()
     callingCode: getCountryCallingCode(country),
   }))
   .sort((first, second) => first.label.localeCompare(second.label, 'es'))
+
+function parseClientPhone(value: string, country: CountryCode) {
+  const phone = parsePhoneNumberFromString(value.trim(), country)
+  return phone?.isValid() ? phone : null
+}
 
 type CountrySelectProps = {
   value: CountryCode
@@ -448,7 +453,11 @@ export function ClientIntakeForm() {
   function getStepError(step: ClientFormStep) {
     if (step === 1) {
       if (!form.nombre.trim()) return 'Escribe tu nombre completo.'
-      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de teléfono válido.'
+      const phone = parseClientPhone(form.telefono, form.country)
+      if (!phone) return 'Escribe un número de teléfono válido.'
+      if (phone.country && phone.country !== form.country) {
+        return 'El prefijo del teléfono no coincide con el país seleccionado.'
+      }
     }
 
     if (step === 2) {
@@ -491,7 +500,7 @@ export function ClientIntakeForm() {
 
     setError('')
 
-    const phoneDigits = form.telefono.replace(/\D/g, '')
+    const phone = parseClientPhone(form.telefono, form.country)
     for (const step of [1, 2, 3] as const) {
       const stepError = getStepError(step)
       if (stepError) {
@@ -504,7 +513,7 @@ export function ClientIntakeForm() {
       setSubmitting(true)
       const response = await submitClientRequest({
         nombre: form.nombre.trim(),
-        telefono: `${getCountryCallingCode(form.country)}${phoneDigits}`,
+        telefono: phone?.number ?? '',
         monto: Number(form.monto),
         carpeta: form.carpeta.trim(),
         fechaInicio: form.fechaInicio,
@@ -628,11 +637,17 @@ export function ClientIntakeForm() {
             <span>Teléfono *</span>
             <input
               value={form.telefono}
-              onChange={(event) => setForm({ ...form, telefono: event.target.value.slice(0, 12) })}
+              onChange={(event) => setForm({ ...form, telefono: event.target.value.slice(0, 20) })}
+              onBlur={() => {
+                const phone = parseClientPhone(form.telefono, form.country)
+                if (phone?.country === form.country) {
+                  setForm((current) => ({ ...current, telefono: phone.formatNational() }))
+                }
+              }}
               placeholder="999 999 999"
               inputMode="tel"
               autoComplete="tel"
-              maxLength={12}
+              maxLength={20}
             />
           </label>
             </div>
