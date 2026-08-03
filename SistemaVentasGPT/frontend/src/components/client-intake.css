@@ -688,10 +688,11 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  border: 1px solid #26334b;
+  justify-content: center;
+  border: 1px solid #2b3a55;
   border-radius: 13px;
   color: #f8fafc;
-  background: rgba(15, 23, 42, 0.86);
+  background: linear-gradient(180deg, rgba(18, 30, 53, 0.96), rgba(13, 23, 42, 0.92));
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -726,7 +727,7 @@
 }
 
 .client-intake-country-code {
-  margin-left: 8px;
+  margin-left: 4px;
   padding-left: 0;
   color: #93c5fd;
   white-space: nowrap;
@@ -1363,7 +1364,7 @@
   .client-intake-contact-grid .client-intake-field--wide { grid-column: 1 / -1; }
   .client-intake-country-trigger { gap: 8px; padding-inline: 12px; }
   .client-intake-country-trigger .client-intake-country-name { display: none; }
-  .client-intake-country-trigger .client-intake-country-code { margin-left: 4px; padding-left: 0; }
+  .client-intake-country-trigger .client-intake-country-code { margin-left: 2px; padding-left: 0; }
   .client-intake-country-trigger .client-intake-country-chevron { margin-left: 0; }
   .client-intake-section-title { margin-bottom: 16px; }
   .client-intake-field input,
