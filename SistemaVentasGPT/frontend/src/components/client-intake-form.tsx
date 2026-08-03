@@ -801,10 +801,10 @@ export function ClientIntakeForm() {
 
           {additionalDeviceCount > 0 && (
             <div className="client-intake-device-cost" role="note">
-              <span className="client-intake-currency-badge" aria-hidden="true">S/</span>
+              <span className="client-intake-currency-badge" aria-hidden="true">✓</span>
               <span>
-                <strong>Costo por dispositivo adicional</strong>
-                Desde 2 dispositivos se aplica un costo adicional. Coordínalo con el dueño.
+                <strong>Aprobación para dispositivos adicionales</strong>
+                Registra 2 o más dispositivos únicamente si fue aprobado previamente por Manuel.
               </span>
             </div>
           )}
