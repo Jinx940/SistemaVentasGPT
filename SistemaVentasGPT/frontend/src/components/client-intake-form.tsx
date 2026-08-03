@@ -555,7 +555,7 @@ export function ClientIntakeForm() {
 
           <div className="client-intake-success__summary">
             <div>
-              <span>Inicio del periodo pagado</span>
+              <span>Fecha de inicio del pago</span>
               <strong>{formatCalendarDate(form.fechaInicio)}</strong>
             </div>
             <div>
@@ -709,10 +709,10 @@ export function ClientIntakeForm() {
           </div>
 
           <label className="client-intake-field">
-            <span>Inicio del periodo pagado *</span>
+            <span>Fecha de inicio del pago *</span>
             <PremiumDatePicker
               value={form.fechaInicio}
-              placeholder="Desde qué fecha cubre este pago"
+              placeholder="Selecciona cuándo inicia el pago"
               ariaLabel="Fecha de inicio del periodo cubierto por el pago"
               onChange={(fechaInicio) => setForm((current) => ({
                 ...current,
@@ -720,13 +720,10 @@ export function ClientIntakeForm() {
                 fechaCierre: addOneMonthToInput(fechaInicio),
               }))}
             />
-            <small className="client-intake-field-help">
-              Indica desde qué fecha comienza a cubrir el pago realizado. No es la fecha en que empezaste como cliente.
-            </small>
           </label>
 
           <div className="client-intake-field">
-            <span>Fin del periodo pagado</span>
+            <span>Fecha de vencimiento del pago</span>
             <div className={`client-intake-auto-date ${form.fechaCierre ? 'has-value' : ''}`} aria-live="polite">
               <span className="client-intake-auto-date__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -737,7 +734,7 @@ export function ClientIntakeForm() {
               </span>
               <span>
                 <strong>{form.fechaCierre ? formatCalendarDate(form.fechaCierre) : 'Se calculará automáticamente'}</strong>
-                <small>Un mes después del inicio del periodo pagado</small>
+                <small>Un mes después de la fecha de inicio</small>
               </span>
             </div>
           </div>
