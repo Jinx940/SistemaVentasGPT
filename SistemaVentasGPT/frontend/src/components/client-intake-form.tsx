@@ -28,6 +28,13 @@ function parseClientPhone(value: string, country: CountryCode) {
   return phone?.isValid() ? phone : null
 }
 
+function normalizePhoneInput(value: string, country: CountryCode) {
+  if (country !== 'PE') return value.slice(0, 20)
+  const digits = value.replace(/\D/g, '')
+  const nationalDigits = digits.length > 9 && digits.startsWith('51') ? digits.slice(2) : digits
+  return nationalDigits.slice(0, 9)
+}
+
 type CountrySelectProps = {
   value: CountryCode
   onChange: (country: CountryCode) => void
@@ -630,24 +637,34 @@ export function ClientIntakeForm() {
 
           <div className="client-intake-field client-intake-country-field">
             <span>País *</span>
-            <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} />
+            <CountrySelect
+              value={form.country}
+              onChange={(country) => setForm((current) => ({
+                ...current,
+                country,
+                telefono: normalizePhoneInput(current.telefono, country),
+              }))}
+            />
           </div>
 
           <label className="client-intake-field client-intake-phone-field">
             <span>Teléfono *</span>
             <input
               value={form.telefono}
-              onChange={(event) => setForm({ ...form, telefono: event.target.value.slice(0, 20) })}
+              onChange={(event) => {
+                const telefono = normalizePhoneInput(event.target.value, form.country)
+                setForm({ ...form, telefono })
+              }}
               onBlur={() => {
                 const phone = parseClientPhone(form.telefono, form.country)
-                if (phone?.country === form.country) {
+                if (form.country !== 'PE' && phone?.country === form.country) {
                   setForm((current) => ({ ...current, telefono: phone.formatNational() }))
                 }
               }}
               placeholder="999 999 999"
               inputMode="tel"
               autoComplete="tel"
-              maxLength={20}
+              maxLength={form.country === 'PE' ? 9 : 20}
             />
           </label>
             </div>
