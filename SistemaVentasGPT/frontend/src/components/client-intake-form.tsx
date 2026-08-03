@@ -702,8 +702,9 @@ export function ClientIntakeForm() {
             </span>
             <input
               value={form.carpeta}
-              onChange={(event) => setForm({ ...form, carpeta: event.target.value })}
+              onChange={(event) => setForm({ ...form, carpeta: event.target.value.slice(0, 15) })}
               placeholder="Nombre o alias que aparece en GPT"
+              maxLength={15}
             />
           </div>
 
