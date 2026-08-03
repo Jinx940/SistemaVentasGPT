@@ -684,9 +684,9 @@
 .client-intake-country-trigger {
   width: 100%;
   min-height: 46px;
-  padding: 11px 14px;
+  padding: 11px 18px;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   border: 1px solid #26334b;
   border-radius: 13px;
@@ -727,11 +727,13 @@
 
 .client-intake-country-code {
   margin-left: auto;
+  padding-left: 12px;
   color: #93c5fd;
   white-space: nowrap;
 }
 
 .client-intake-country-chevron {
+  margin-left: 2px;
   color: #94a3b8;
   font-size: 18px;
   line-height: 1;
@@ -1359,9 +1361,9 @@
     column-gap: 10px;
   }
   .client-intake-contact-grid .client-intake-field--wide { grid-column: 1 / -1; }
-  .client-intake-country-trigger { gap: 7px; padding-inline: 10px; }
+  .client-intake-country-trigger { gap: 8px; padding-inline: 12px; }
   .client-intake-country-trigger .client-intake-country-name { display: none; }
-  .client-intake-country-trigger .client-intake-country-code { margin-left: 0; }
+  .client-intake-country-trigger .client-intake-country-code { margin-left: 0; padding-left: 0; }
   .client-intake-country-trigger .client-intake-country-chevron { margin-left: auto; }
   .client-intake-section-title { margin-bottom: 16px; }
   .client-intake-field input,
