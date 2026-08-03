@@ -676,6 +676,19 @@
   font-weight: 700;
 }
 
+.client-intake-field-help {
+  display: block;
+  margin-top: -2px;
+  padding: 8px 10px;
+  border-left: 2px solid #38bdf8;
+  border-radius: 0 8px 8px 0;
+  color: #a5b4c8;
+  background: rgba(14, 116, 144, 0.1);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .client-intake-country-select {
   position: relative;
   min-width: 0;

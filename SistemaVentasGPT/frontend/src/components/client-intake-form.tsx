@@ -471,7 +471,7 @@ export function ClientIntakeForm() {
     if (step === 2) {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
-      if (!form.fechaInicio) return 'Selecciona la fecha en que inició el servicio.'
+      if (!form.fechaInicio) return 'Selecciona desde qué fecha comienza el periodo cubierto por este pago.'
       if (!form.fechaCierre) return 'No se pudo calcular la fecha de vencimiento.'
       if (!form.cuentaAccesoId) {
         return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
@@ -550,17 +550,17 @@ export function ClientIntakeForm() {
           </div>
           <h1>¡Gracias! Tu servicio quedó registrado.</h1>
           <p className="client-intake-success__intro">
-            Guardamos tus datos correctamente. El servicio dura un mes desde la fecha de inicio indicada.
+            Guardamos tus datos correctamente. El pago registrado cubre un mes desde la fecha indicada.
           </p>
 
           <div className="client-intake-success__summary">
             <div>
-              <span>Inicio del servicio</span>
+              <span>Inicio del periodo pagado</span>
               <strong>{formatCalendarDate(form.fechaInicio)}</strong>
             </div>
             <div>
               <span>Duración</span>
-              <strong>1 mes de servicio</strong>
+              <strong>1 mes cubierto</strong>
             </div>
             <div>
               <span>Vencimiento y próximo pago</span>
@@ -709,21 +709,24 @@ export function ClientIntakeForm() {
           </div>
 
           <label className="client-intake-field">
-            <span>Fecha de inicio del servicio *</span>
+            <span>Inicio del periodo pagado *</span>
             <PremiumDatePicker
               value={form.fechaInicio}
-              placeholder="Selecciona la fecha de inicio"
-              ariaLabel="Fecha de inicio del servicio"
+              placeholder="Desde qué fecha cubre este pago"
+              ariaLabel="Fecha de inicio del periodo cubierto por el pago"
               onChange={(fechaInicio) => setForm((current) => ({
                 ...current,
                 fechaInicio,
                 fechaCierre: addOneMonthToInput(fechaInicio),
               }))}
             />
+            <small className="client-intake-field-help">
+              Indica desde qué fecha comienza a cubrir el pago realizado. No es la fecha en que empezaste como cliente.
+            </small>
           </label>
 
           <div className="client-intake-field">
-            <span>Vencimiento del servicio</span>
+            <span>Fin del periodo pagado</span>
             <div className={`client-intake-auto-date ${form.fechaCierre ? 'has-value' : ''}`} aria-live="polite">
               <span className="client-intake-auto-date__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -734,7 +737,7 @@ export function ClientIntakeForm() {
               </span>
               <span>
                 <strong>{form.fechaCierre ? formatCalendarDate(form.fechaCierre) : 'Se calculará automáticamente'}</strong>
-                <small>Un mes después de la fecha de inicio</small>
+                <small>Un mes después del inicio del periodo pagado</small>
               </span>
             </div>
           </div>
