@@ -409,6 +409,7 @@ const emptyForm: ClientFormState = {
 
 export function ClientIntakeForm() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
+  const [showProjectHelp, setShowProjectHelp] = useState(false)
   const [accessAccounts, setAccessAccounts] = useState<CuentaAccesoPublica[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState('')
@@ -681,14 +682,30 @@ export function ClientIntakeForm() {
             <span>Pago mensual acordado *</span>
             <div className="client-intake-money-input">
               <strong>S/</strong>
-              <input value={form.monto} onChange={(event) => setForm({ ...form, monto: event.target.value })} placeholder="0.00" inputMode="decimal" type="number" min="0.01" step="0.01" aria-label="Pago mensual acordado en soles" />
+              <input
+                value={form.monto}
+                onChange={(event) => setForm({ ...form, monto: event.target.value.replace(/\D/g, '').slice(0, 2) })}
+                placeholder="00"
+                inputMode="numeric"
+                maxLength={2}
+                aria-label="Pago mensual acordado en soles, máximo dos dígitos"
+              />
             </div>
           </label>
 
-          <label className="client-intake-field">
-            <span>Nombre del proyecto *</span>
-            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Nombre de tu carpeta" />
-          </label>
+          <div className="client-intake-field">
+            <span className="client-intake-field-label">
+              Nombre del proyecto *
+              <button type="button" className="client-intake-project-help" onClick={() => setShowProjectHelp(true)}>
+                ¿Qué debo poner?
+              </button>
+            </span>
+            <input
+              value={form.carpeta}
+              onChange={(event) => setForm({ ...form, carpeta: event.target.value })}
+              placeholder="Nombre o alias que aparece en GPT"
+            />
+          </div>
 
           <label className="client-intake-field">
             <span>Fecha de inicio del servicio *</span>
@@ -797,6 +814,23 @@ export function ClientIntakeForm() {
           </label>
             </div>
           </section>}
+
+          {showProjectHelp && (
+            <div className="client-intake-project-modal" role="dialog" aria-modal="true" aria-labelledby="project-help-title">
+              <button type="button" className="client-intake-project-modal__backdrop" aria-label="Cerrar ejemplo" onClick={() => setShowProjectHelp(false)} />
+              <div className="client-intake-project-modal__card">
+                <button type="button" className="client-intake-project-modal__close" aria-label="Cerrar ejemplo" onClick={() => setShowProjectHelp(false)}>×</button>
+                <span className="client-intake-project-modal__eyebrow">EJEMPLO</span>
+                <h2 id="project-help-title">¿Qué nombre debo escribir?</h2>
+                <p>Escribe el nombre o alias con el que apareces dentro de GPT. En este ejemplo podría ser <strong>Manuel</strong> o <strong>George</strong>.</p>
+                <div className="client-intake-project-example" aria-label="Ejemplo de nombres dentro de GPT">
+                  <div><span aria-hidden="true">♧</span><strong>Manuel</strong></div>
+                  <div><span aria-hidden="true">♡</span><strong>George</strong></div>
+                </div>
+                <button type="button" className="client-intake-project-modal__understood" onClick={() => setShowProjectHelp(false)}>Entendido</button>
+              </div>
+            </div>
+          )}
 
           <label className="client-intake-honeypot" aria-hidden="true">
             Sitio web
