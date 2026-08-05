@@ -684,14 +684,15 @@
 .client-intake-country-trigger {
   width: 100%;
   min-height: 46px;
-  padding: 11px 14px;
+  padding: 11px 18px;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  border: 1px solid #26334b;
+  justify-content: center;
+  border: 1px solid #2b3a55;
   border-radius: 13px;
   color: #f8fafc;
-  background: rgba(15, 23, 42, 0.86);
+  background: linear-gradient(180deg, rgba(18, 30, 53, 0.96), rgba(13, 23, 42, 0.92));
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -726,12 +727,14 @@
 }
 
 .client-intake-country-code {
-  margin-left: auto;
+  margin-left: 4px;
+  padding-left: 0;
   color: #93c5fd;
   white-space: nowrap;
 }
 
 .client-intake-country-chevron {
+  margin-left: 0;
   color: #94a3b8;
   font-size: 18px;
   line-height: 1;
@@ -942,6 +945,118 @@
 }
 
 .client-intake-money-input input { padding-left: 48px; }
+
+.client-intake-field-label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.client-intake-project-help {
+  border: 0;
+  padding: 0;
+  color: #60a5fa;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.client-intake-project-help:hover { color: #93c5fd; }
+
+.client-intake-project-modal {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.client-intake-project-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(7px);
+  cursor: pointer;
+}
+
+.client-intake-project-modal__card {
+  position: relative;
+  width: min(100%, 430px);
+  padding: 28px;
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  border-radius: 20px;
+  color: #e2e8f0;
+  background: linear-gradient(145deg, #0d1930, #071022);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.5), 0 0 32px rgba(37, 99, 235, 0.14);
+}
+
+.client-intake-project-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 9px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.7);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.client-intake-project-modal__eyebrow {
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.client-intake-project-modal__card h2 {
+  margin: 8px 36px 8px 0;
+  color: #fff;
+  font-size: 22px;
+}
+
+.client-intake-project-modal__card p {
+  margin: 0 0 18px;
+  color: #aebbd0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.client-intake-project-example {
+  margin-bottom: 18px;
+  padding: 15px 18px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 13px;
+  color: #fff;
+  background: #020202;
+}
+
+.client-intake-project-example div { display: flex; gap: 10px; align-items: center; }
+.client-intake-project-example span { color: #a855f7; font-size: 18px; }
+.client-intake-project-example div:first-child span { color: #fb5a45; }
+
+.client-intake-project-modal__understood {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(90deg, #2563eb, #0ea5e9);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
 
 .client-intake-device-cost {
   grid-column: 1 / -1;
@@ -1247,10 +1362,10 @@
     column-gap: 10px;
   }
   .client-intake-contact-grid .client-intake-field--wide { grid-column: 1 / -1; }
-  .client-intake-country-trigger { gap: 7px; padding-inline: 10px; }
+  .client-intake-country-trigger { gap: 8px; padding-inline: 12px; }
   .client-intake-country-trigger .client-intake-country-name { display: none; }
-  .client-intake-country-trigger .client-intake-country-code { margin-left: 0; }
-  .client-intake-country-trigger .client-intake-country-chevron { margin-left: auto; }
+  .client-intake-country-trigger .client-intake-country-code { margin-left: 2px; padding-left: 0; }
+  .client-intake-country-trigger .client-intake-country-chevron { margin-left: 0; }
   .client-intake-section-title { margin-bottom: 16px; }
   .client-intake-field input,
   .client-intake-field select,

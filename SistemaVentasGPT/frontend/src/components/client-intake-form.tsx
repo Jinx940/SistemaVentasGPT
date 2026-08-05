@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js/min'
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js/min'
 import { getErrorMessage, getPublicAccessAccounts, submitClientRequest } from '../api'
 import gptLogo from '../assets/GPT.png'
 import type { CuentaAccesoPublica } from '../types'
@@ -22,6 +22,18 @@ const phoneCountries = getCountries()
     callingCode: getCountryCallingCode(country),
   }))
   .sort((first, second) => first.label.localeCompare(second.label, 'es'))
+
+function parseClientPhone(value: string, country: CountryCode) {
+  const phone = parsePhoneNumberFromString(value.trim(), country)
+  return phone?.isValid() ? phone : null
+}
+
+function normalizePhoneInput(value: string, country: CountryCode) {
+  if (country !== 'PE') return value.slice(0, 20)
+  const digits = value.replace(/\D/g, '')
+  const nationalDigits = digits.length > 9 && digits.startsWith('51') ? digits.slice(2) : digits
+  return nationalDigits.slice(0, 9)
+}
 
 type CountrySelectProps = {
   value: CountryCode
@@ -397,6 +409,7 @@ const emptyForm: ClientFormState = {
 
 export function ClientIntakeForm() {
   const [form, setForm] = useState<ClientFormState>(emptyForm)
+  const [showProjectHelp, setShowProjectHelp] = useState(false)
   const [accessAccounts, setAccessAccounts] = useState<CuentaAccesoPublica[]>([])
   const [accountsLoading, setAccountsLoading] = useState(true)
   const [accountsError, setAccountsError] = useState('')
@@ -448,13 +461,17 @@ export function ClientIntakeForm() {
   function getStepError(step: ClientFormStep) {
     if (step === 1) {
       if (!form.nombre.trim()) return 'Escribe tu nombre completo.'
-      if (form.telefono.replace(/\D/g, '').length < 7) return 'Escribe un número de teléfono válido.'
+      const phone = parseClientPhone(form.telefono, form.country)
+      if (!phone) return 'Escribe un número de teléfono válido.'
+      if (phone.country && phone.country !== form.country) {
+        return 'El prefijo del teléfono no coincide con el país seleccionado.'
+      }
     }
 
     if (step === 2) {
       if (Number(form.monto) <= 0) return 'Escribe el monto acordado.'
       if (!form.carpeta.trim()) return 'Escribe un nombre para identificar tu proyecto y tus chats.'
-      if (!form.fechaInicio) return 'Selecciona la fecha en que inició el servicio.'
+      if (!form.fechaInicio) return 'Selecciona desde qué fecha comienza el periodo cubierto por este pago.'
       if (!form.fechaCierre) return 'No se pudo calcular la fecha de vencimiento.'
       if (!form.cuentaAccesoId) {
         return accountsError || 'Selecciona el correo que usarás para acceder al servicio.'
@@ -491,7 +508,7 @@ export function ClientIntakeForm() {
 
     setError('')
 
-    const phoneDigits = form.telefono.replace(/\D/g, '')
+    const phone = parseClientPhone(form.telefono, form.country)
     for (const step of [1, 2, 3] as const) {
       const stepError = getStepError(step)
       if (stepError) {
@@ -504,7 +521,7 @@ export function ClientIntakeForm() {
       setSubmitting(true)
       const response = await submitClientRequest({
         nombre: form.nombre.trim(),
-        telefono: `${getCountryCallingCode(form.country)}${phoneDigits}`,
+        telefono: phone?.number ?? '',
         monto: Number(form.monto),
         carpeta: form.carpeta.trim(),
         fechaInicio: form.fechaInicio,
@@ -533,17 +550,17 @@ export function ClientIntakeForm() {
           </div>
           <h1>¡Gracias! Tu servicio quedó registrado.</h1>
           <p className="client-intake-success__intro">
-            Guardamos tus datos correctamente. El servicio dura un mes desde la fecha de inicio indicada.
+            Guardamos tus datos correctamente. El pago registrado cubre un mes desde la fecha indicada.
           </p>
 
           <div className="client-intake-success__summary">
             <div>
-              <span>Inicio del servicio</span>
+              <span>Fecha de inicio del pago</span>
               <strong>{formatCalendarDate(form.fechaInicio)}</strong>
             </div>
             <div>
               <span>Duración</span>
-              <strong>1 mes de servicio</strong>
+              <strong>1 mes cubierto</strong>
             </div>
             <div>
               <span>Vencimiento y próximo pago</span>
@@ -621,18 +638,34 @@ export function ClientIntakeForm() {
 
           <div className="client-intake-field client-intake-country-field">
             <span>País *</span>
-            <CountrySelect value={form.country} onChange={(country) => setForm({ ...form, country })} />
+            <CountrySelect
+              value={form.country}
+              onChange={(country) => setForm((current) => ({
+                ...current,
+                country,
+                telefono: normalizePhoneInput(current.telefono, country),
+              }))}
+            />
           </div>
 
           <label className="client-intake-field client-intake-phone-field">
             <span>Teléfono *</span>
             <input
               value={form.telefono}
-              onChange={(event) => setForm({ ...form, telefono: event.target.value.slice(0, 12) })}
+              onChange={(event) => {
+                const telefono = normalizePhoneInput(event.target.value, form.country)
+                setForm({ ...form, telefono })
+              }}
+              onBlur={() => {
+                const phone = parseClientPhone(form.telefono, form.country)
+                if (form.country !== 'PE' && phone?.country === form.country) {
+                  setForm((current) => ({ ...current, telefono: phone.formatNational() }))
+                }
+              }}
               placeholder="999 999 999"
               inputMode="tel"
               autoComplete="tel"
-              maxLength={12}
+              maxLength={form.country === 'PE' ? 9 : 20}
             />
           </label>
             </div>
@@ -649,21 +682,38 @@ export function ClientIntakeForm() {
             <span>Pago mensual acordado *</span>
             <div className="client-intake-money-input">
               <strong>S/</strong>
-              <input value={form.monto} onChange={(event) => setForm({ ...form, monto: event.target.value })} placeholder="0.00" inputMode="decimal" type="number" min="0.01" step="0.01" aria-label="Pago mensual acordado en soles" />
+              <input
+                value={form.monto}
+                onChange={(event) => setForm({ ...form, monto: event.target.value.replace(/\D/g, '').slice(0, 2) })}
+                placeholder="00"
+                inputMode="numeric"
+                maxLength={2}
+                aria-label="Pago mensual acordado en soles, máximo dos dígitos"
+              />
             </div>
           </label>
 
-          <label className="client-intake-field">
-            <span>Nombre del proyecto *</span>
-            <input value={form.carpeta} onChange={(event) => setForm({ ...form, carpeta: event.target.value })} placeholder="Nombre de tu carpeta" />
-          </label>
+          <div className="client-intake-field">
+            <span className="client-intake-field-label">
+              Nombre del proyecto *
+              <button type="button" className="client-intake-project-help" onClick={() => setShowProjectHelp(true)}>
+                ¿Qué debo poner?
+              </button>
+            </span>
+            <input
+              value={form.carpeta}
+              onChange={(event) => setForm({ ...form, carpeta: event.target.value.slice(0, 15) })}
+              placeholder="Nombre o alias que aparece en GPT"
+              maxLength={15}
+            />
+          </div>
 
           <label className="client-intake-field">
-            <span>Fecha de inicio del servicio *</span>
+            <span>Fecha de inicio del pago *</span>
             <PremiumDatePicker
               value={form.fechaInicio}
-              placeholder="Selecciona la fecha de inicio"
-              ariaLabel="Fecha de inicio del servicio"
+              placeholder="Selecciona cuándo inicia el pago"
+              ariaLabel="Fecha de inicio del periodo cubierto por el pago"
               onChange={(fechaInicio) => setForm((current) => ({
                 ...current,
                 fechaInicio,
@@ -673,7 +723,7 @@ export function ClientIntakeForm() {
           </label>
 
           <div className="client-intake-field">
-            <span>Vencimiento del servicio</span>
+            <span>Fecha de vencimiento del pago</span>
             <div className={`client-intake-auto-date ${form.fechaCierre ? 'has-value' : ''}`} aria-live="polite">
               <span className="client-intake-auto-date__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -751,10 +801,10 @@ export function ClientIntakeForm() {
 
           {additionalDeviceCount > 0 && (
             <div className="client-intake-device-cost" role="note">
-              <span className="client-intake-currency-badge" aria-hidden="true">S/</span>
+              <span className="client-intake-currency-badge" aria-hidden="true">✓</span>
               <span>
-                <strong>Costo por dispositivo adicional</strong>
-                Desde 2 dispositivos se aplica un costo adicional. Coordínalo con el dueño.
+                <strong>Aprobación para dispositivos adicionales</strong>
+                Registra 2 o más dispositivos únicamente si fue aprobado previamente por Manuel.
               </span>
             </div>
           )}
@@ -765,6 +815,23 @@ export function ClientIntakeForm() {
           </label>
             </div>
           </section>}
+
+          {showProjectHelp && (
+            <div className="client-intake-project-modal" role="dialog" aria-modal="true" aria-labelledby="project-help-title">
+              <button type="button" className="client-intake-project-modal__backdrop" aria-label="Cerrar ejemplo" onClick={() => setShowProjectHelp(false)} />
+              <div className="client-intake-project-modal__card">
+                <button type="button" className="client-intake-project-modal__close" aria-label="Cerrar ejemplo" onClick={() => setShowProjectHelp(false)}>×</button>
+                <span className="client-intake-project-modal__eyebrow">EJEMPLO</span>
+                <h2 id="project-help-title">¿Qué nombre debo escribir?</h2>
+                <p>Escribe el nombre o alias con el que apareces dentro de GPT. En este ejemplo podría ser <strong>Manuel</strong> o <strong>George</strong>.</p>
+                <div className="client-intake-project-example" aria-label="Ejemplo de nombres dentro de GPT">
+                  <div><span aria-hidden="true">♧</span><strong>Manuel</strong></div>
+                  <div><span aria-hidden="true">♡</span><strong>George</strong></div>
+                </div>
+                <button type="button" className="client-intake-project-modal__understood" onClick={() => setShowProjectHelp(false)}>Entendido</button>
+              </div>
+            </div>
+          )}
 
           <label className="client-intake-honeypot" aria-hidden="true">
             Sitio web
